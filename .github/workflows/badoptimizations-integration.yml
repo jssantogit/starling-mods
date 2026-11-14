@@ -1,0 +1,55 @@
+name: BadOptimizations native-mixin plan
+
+on:
+  push:
+    paths:
+      - 'mods/badoptimizations/native/**'
+      - '.github/workflows/badoptimizations-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source prototype
+        uses: actions/checkout@v4
+      - name: Checkout exact Starling revision
+        uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+      - name: Checkout exact horizon-mixins revision
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mixins
+          ref: ddd9700b21997c95d95ac6ee5ecafe3830cf622a
+          path: upstream/horizon-mixins
+      - name: Install Rust for horizon-mixins
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+      - name: Resolve source hooks against actual Starling renderer
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- plan \
+            --workspace upstream/starling \
+            --mods mods/badoptimizations/native/mixins \
+            --out target/badoptimizations-plan.json
+      - name: Apply source mixins to a separate stage
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- apply \
+            --workspace upstream/starling \
+            --mods mods/badoptimizations/native/mixins \
+            --out target/badoptimizations-stage
+      - name: Save mixin plan for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: badoptimizations-native-plan
+          path: target/badoptimizations-plan.json
+          if-no-files-found: ignore
