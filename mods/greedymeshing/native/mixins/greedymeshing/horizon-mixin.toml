@@ -26,7 +26,7 @@ kind = "RETURN"
 target = "horizon_client_render::mesher::Mesher<'_>::mesh_reusing"
 helper = "after.rs"
 bindings = [
-  { name = "result", ty = "crate::mesher::SectionMesh", value = "$value" },
-  { name = "mesher", ty = "&crate::mesher::Mesher<'_>", value = "&*self" },
-  { name = "scratch", ty = "&crate::mesher::MeshScratch", value = "&*scratch" },
+  { name = "result", ty = "SectionMesh", value = "$value" },
+  { name = "mesher", ty = "&Mesher<'_>", value = "&*self" },
+  { name = "scratch", ty = "&MeshScratch", value = "&*scratch" },
 ]
