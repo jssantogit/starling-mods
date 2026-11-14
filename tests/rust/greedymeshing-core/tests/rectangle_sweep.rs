@@ -197,7 +197,7 @@ fn projects_the_six_face_directions_into_block_planes() {
     for axis in 0..3usize {
         for positive in [false, true] {
             let mut q = [[0.0f32; 3]; 4];
-            let uv = if positive == (axis != 1) {
+            let uv: [[u8; 2]; 4] = if positive == (axis != 1) {
                 [[0, 0], [1, 0], [1, 1], [0, 1]]
             } else {
                 [[0, 0], [0, 1], [1, 1], [1, 0]]
