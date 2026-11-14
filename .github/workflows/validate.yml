@@ -1,9 +1,12 @@
 name: Validate repository tooling
+
 on:
   push:
   pull_request:
+
 permissions:
   contents: read
+
 jobs:
   tests:
     runs-on: ubuntu-latest
@@ -16,3 +19,12 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Syntax validation
         run: python -m compileall -q tools tests
+
+      - name: Standalone Rust cache regression tests
+        run: cargo test --manifest-path tests/rust/lightmap-cache/Cargo.toml --offline
+      - name: Standalone Rust FOV shortcut regression tests
+        run: cargo test --manifest-path tests/rust/fov-fastpath/Cargo.toml --offline
+      - name: Rust formatting
+        run: |
+          cargo fmt --manifest-path tests/rust/lightmap-cache/Cargo.toml -- --check
+          cargo fmt --manifest-path tests/rust/fov-fastpath/Cargo.toml -- --check

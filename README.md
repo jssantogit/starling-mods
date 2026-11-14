@@ -2,13 +2,13 @@
 
 Community workspace for **independent performance-mod adaptations for [Starling](https://github.com/starling-client/starling)**, the Android port of Horizon. The canonical source for all mods we develop here is this repository.
 
-**Status: infrastructure established; no performance mod has been ported or released yet.** A candidate directory is not an installable mod. Do not import its files into the game.
+**Status: combined native-source prototype of BadOptimizations (lightmap, particles and FOV). Source mixins and Linux/Android ARM64 Cargo checks have passed; final device/gameplay benchmarks and release review are pending.** A source archive alone is not a verified working mod.
 
 ## Catalog
 
 | Mod / inspiration | Scope | Status |
 | --- | --- | --- |
-| [BadOptimizations](mods/badoptimizations/README.md) | Investigate avoiding redundant lightmap updates, idle debug work | **Research** (no source bundle) |
+| [BadOptimizations](mods/badoptimizations/README.md) | Lightmap CPU cache, empty particle extraction and FOV-effect fast path | **Combined alpha prototype** (ARM64 Cargo check passed; no gameplay/release) |
 | Gnetum | Check HUD update costs against existing Starling code | Backlog |
 | Particle Core | Investigate particle update overhead beyond existing culling | Backlog |
 | C2ME | Evaluate chunk task scheduling (large, engine-level changes) | Backlog |
