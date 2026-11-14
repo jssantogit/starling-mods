@@ -246,6 +246,15 @@ impl FacePlane {
             seen |= bit;
             out[index] = [u0, v0];
         }
+        // Each successive edge must join two adjacent corners. Distinct
+        // corners alone can still form a self-crossing bow-tie quad.
+        for i in 0..4 {
+            let a = out[i];
+            let b = out[(i + 1) % 4];
+            if a[0].abs_diff(b[0]) + a[1].abs_diff(b[1]) != 1 {
+                return None;
+            }
+        }
         (seen == 0b1111).then_some(out)
     }
 }
