@@ -279,3 +279,16 @@ fn face_at_section_boundary_never_references_a_block_beyond_section() {
     assert_eq!(face.sign, -1);
     assert_eq!(face.block_coords(), Some([0, 0, 0]));
 }
+
+#[test]
+fn self_crossing_quad_is_not_eligible_for_merge() {
+    // All four canonical corners exist, but the perimeter crosses itself.
+    let bowtie = [
+        [2.0, 4.0, 3.0],
+        [3.0, 4.0, 4.0],
+        [3.0, 4.0, 3.0],
+        [2.0, 4.0, 4.0],
+    ];
+    let projection = project_quad(&bowtie).unwrap();
+    assert!(projection.unit_corners(&bowtie).is_none());
+}
