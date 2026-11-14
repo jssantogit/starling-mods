@@ -1,6 +1,6 @@
 [mod]
 id = "greedymeshing"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 priority = 110
 
 [compatibility]
@@ -13,7 +13,7 @@ file = "crates/horizon-client-render/src/mesher.rs"
 name = "greedymeshing_core"
 source = "core.rs"
 
-# Only vertical +Y, full-cube, flat-lit, solid faces in this initial adapter.
+# Only six axial directions, full-cube, flat-lit solid faces; max 2x2.
 [[module]]
 id = "postprocess"
 file = "crates/horizon-client-render/src/mesher.rs"
