@@ -17,7 +17,7 @@ The prototype injects a cancellable `HEAD` into `Renderer::update_lightmap`, wit
 
 Key inputs are every value read by the current method: environment's ambient colour (RGB), sky light colour (RGB), block light tint (RGB), sky light factor, darkness, gamma, night vision, flicker, boss darkening and `fullbright`. Comparison uses exact float bits. The first render, device reset, changed inputs, changed stored pixels and an uninitialized texture always execute the original code.
 
-**Not yet ported:** particle extraction, debug renderer, toast and entity microoptimizations. Sky-colour caching from Minecraft 1.21.10 and below is obsolete for data-driven 26.3. Java mod FPS measurements do not predict Starling performance. See [the feature-by-feature port matrix](PORT_MATRIX.md) for the remaining audit scope.
+**Also implemented in this combined prototype:** an early return for particle extraction when the particle engine is empty (no quaternions/light cache created), and a fast path for zero FOV-effect scale that preserves the first-person spyglass modifier. **Still excluded or already native:** inactive debug rendering, idle toast work, entity renderer indirections and Java-only microoptimizations. Sky-colour caching from Minecraft 1.21.10 and below is obsolete for data-driven 26.3. Java mod FPS measurements do not predict Starling performance. See [the feature-by-feature port matrix](PORT_MATRIX.md) for the remaining audit scope.
 
 ## Layout
 
@@ -25,7 +25,9 @@ Key inputs are every value read by the current method: environment's ambient col
 - `native/mixins/badoptimizations/horizon-mixin.toml`: typed source targets, thread-local cache and HEAD/RETURN hooks.
 - `native/mixins/badoptimizations/runtime.rs`: independent cache implementation and 9 Rust unit tests.
 - `native/mixins/badoptimizations/{before,after}.rs`: adapters to Starling's renderer.
-- `tests/rust/lightmap-cache/Cargo.toml`: standalone Cargo test harness, using the **same** `runtime.rs` included by the mixin.
+- `native/mixins/badoptimizations/particle_before.rs`: empty particle-extraction guard.
+- `native/mixins/badoptimizations/{fov_before,fov_runtime}.rs`: FOV-effect fast path and pure logic tests.
+- `tests/rust/lightmap-cache/Cargo.toml` and `tests/rust/fov-fastpath/Cargo.toml`: standalone Cargo test harnesses, each compiling the **same** Rust file used by the mixins.
 - `tests/test_badoptimizations.py`: Python metadata, wiring and package tests.
 
 ## Checks
@@ -33,7 +35,8 @@ Key inputs are every value read by the current method: environment's ambient col
 ```bash
 python -m unittest discover -s tests -v
 cargo test --manifest-path tests/rust/lightmap-cache/Cargo.toml --offline
-python tools/package_hnmod.py mods/badoptimizations/native --output dist/badoptimizations-0.1.0-alpha.1.hnmod
+cargo test --manifest-path tests/rust/fov-fastpath/Cargo.toml --offline
+python tools/package_hnmod.py mods/badoptimizations/native --output dist/badoptimizations-0.1.0-alpha.2.hnmod
 ```
 
 Passing standalone tests and ZIP validation does **not** prove the Rust hooks resolve in Starling, that the full Android library compiles or that gameplay visuals stay identical. The source and mixin tool require a real `horizon-mixins plan/apply/check` against the exact Starling revision and a native ARM64 build.

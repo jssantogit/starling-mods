@@ -22,5 +22,9 @@ jobs:
 
       - name: Standalone Rust cache regression tests
         run: cargo test --manifest-path tests/rust/lightmap-cache/Cargo.toml --offline
+      - name: Standalone Rust FOV shortcut regression tests
+        run: cargo test --manifest-path tests/rust/fov-fastpath/Cargo.toml --offline
       - name: Rust formatting
-        run: cargo fmt --manifest-path tests/rust/lightmap-cache/Cargo.toml -- --check
+        run: |
+          cargo fmt --manifest-path tests/rust/lightmap-cache/Cargo.toml -- --check
+          cargo fmt --manifest-path tests/rust/fov-fastpath/Cargo.toml -- --check

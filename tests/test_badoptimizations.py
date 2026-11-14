@@ -26,9 +26,13 @@ class BadOptimizationsWiringTests(unittest.TestCase):
         spec = tomllib.loads((MOD / 'mixins/badoptimizations/horizon-mixin.toml').read_text())
         self.assertNotIn('state', spec, 'async Renderer::new cannot be a mixin state constructor')
         injection = spec['injection']
-        self.assertEqual([x['kind'] for x in injection], ['HEAD', 'RETURN'])
+        self.assertEqual([x['kind'] for x in injection], ['HEAD', 'RETURN', 'HEAD', 'HEAD'])
         self.assertTrue(injection[0]['cancellable'])
-        self.assertEqual({x['target'] for x in injection}, {'horizon_client_render::gfx::Renderer::update_lightmap'})
+        self.assertEqual({x['target'] for x in injection}, {
+            'horizon_client_render::gfx::Renderer::update_lightmap',
+            'horizon_client_render::particles::ParticleEngine::render',
+            'horizon_client_render::camera::field_of_view_modifier',
+        })
         self.assertTrue({x['helper'] for x in injection}.issubset(set(p.name for p in (MOD / 'mixins/badoptimizations').iterdir())))
 
     def test_package_is_readable_by_repository_packager(self):
@@ -41,6 +45,8 @@ class BadOptimizationsWiringTests(unittest.TestCase):
                 self.assertIn('horizon-native.json', z.namelist())
                 self.assertIn('mixins/badoptimizations/runtime.rs', z.namelist())
                 self.assertIn('mixins/badoptimizations/horizon-mixin.toml', z.namelist())
+                self.assertIn('mixins/badoptimizations/fov_runtime.rs', z.namelist())
+                self.assertIn('mixins/badoptimizations/particle_before.rs', z.namelist())
 
 if __name__ == '__main__':
     unittest.main()
