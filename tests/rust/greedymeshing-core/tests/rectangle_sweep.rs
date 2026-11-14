@@ -30,7 +30,16 @@ fn empty_plane_emits_no_faces() {
 fn one_uniform_plane_is_one_quad() {
     let faces = [Some(7); 256];
     let rects = merge_plane(&faces);
-    assert_eq!(rects, vec![Rect { col: 0, row: 0, width: 16, height: 16, key: 7 }]);
+    assert_eq!(
+        rects,
+        vec![Rect {
+            col: 0,
+            row: 0,
+            width: 16,
+            height: 16,
+            key: 7
+        }]
+    );
     reconstruct(&faces, &rects);
 }
 
