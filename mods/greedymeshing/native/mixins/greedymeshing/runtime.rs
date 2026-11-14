@@ -1,13 +1,15 @@
-// Conservative native near-chunk greedy meshing pass for Starling 26.3.
-// Only *upward* exposed faces of full opaque cubes are eligible in this alpha.
-// It merges up to 2x2 faces so the existing 16-bit near-section UV format
-// and the built-in WGSL tiling sampler remain usable. Nothing uses global state.
+// Native near-section Greedy Meshing adapter for the six face directions.
+// This remains an experimental 2x2-only port, not a shader-pack-safe release.
+// It runs after Starling's normal mesh construction, leaving ineligible
+// geometry untouched and never extending beyond one 16x16 section.
 
 use super::{Mesher, MeshScratch, OPAQUE_LAYER, SectionMesh, TerrainVertex, pi};
 use std::collections::{BTreeMap, HashMap};
+use super::greedymeshing_core::{self, FacePlane};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 struct Signature {
+    normal: i8,
     layer: u16,
     color: u32,
     light: u16,
@@ -33,62 +35,34 @@ impl Default for Plane {
     }
 }
 
-/// Project any quad onto a horizontal full-integer plane and conservatively
-/// mark all grid cells it covers, including overlays/cutouts/translucency.
-/// This makes us skip cells with two or more drawn surfaces.
-fn coverage(q: &[TerrainVertex; 4]) -> Option<(i32, usize, usize, usize, usize)> {
-    let y = q[0].pos[1];
-    if !y.is_finite() || q.iter().any(|v| v.pos[1] != y) {
-        return None;
-    }
-    let plane = y as i32;
-    if y != plane as f32 || !(1..=16).contains(&plane) {
-        return None;
-    }
-    let min_x = q.iter().map(|v| v.pos[0]).fold(f32::INFINITY, f32::min);
-    let max_x = q.iter().map(|v| v.pos[0]).fold(f32::NEG_INFINITY, f32::max);
-    let min_z = q.iter().map(|v| v.pos[2]).fold(f32::INFINITY, f32::min);
-    let max_z = q.iter().map(|v| v.pos[2]).fold(f32::NEG_INFINITY, f32::max);
-    if ![min_x, max_x, min_z, max_z].iter().all(|v| v.is_finite())
-        || min_x < 0.0
-        || min_z < 0.0
-        || max_x > 16.0
-        || max_z > 16.0
-        || max_x <= min_x
-        || max_z <= min_z
-    {
-        return None;
-    }
-    let (x0, x1) = (min_x.floor() as usize, max_x.ceil() as usize);
-    let (z0, z1) = (min_z.floor() as usize, max_z.ceil() as usize);
-    (x0 < x1 && z0 < z1).then_some((plane, x0, x1, z0, z1))
+/// All axis-aligned planar quads, including ineligible quads, contribute
+/// coverage. A solid quad and a translucent quad in the same cell cannot
+/// cause a merge, even if their normals point in opposite directions.
+fn coverage(q: &[TerrainVertex; 4]) -> Option<FacePlane> {
+    greedymeshing_core::project_quad(&q.map(|v| v.pos))
 }
 
-/// Accept only the unmodified, fully opaque, evenly lit, canonical top face
-/// of a section-local full cube, avoiding translucent, connected, tinted,
-/// emissive, rotated or offset model content.
+/// A candidate must be a single complete quad from a full, opaque cube,
+/// facing either sign of X/Y/Z, with uniform light and matching four-corner
+/// UV coordinates. A rotated texture is fine if all cells have the same
+/// orientation; noncanonical sprite sections are not.
 fn candidate(
     q: &[TerrainVertex; 4],
-    plane: i32,
-    x: usize,
-    z: usize,
+    face: FacePlane,
     mesher: &Mesher<'_>,
     scratch: &MeshScratch,
 ) -> Option<Signature> {
     let first = q[0];
     if first.layer & OPAQUE_LAYER == 0
-        || q.iter().any(|v| v.layer != first.layer || v.color != first.color || v.light != first.light)
+        || q.iter().any(|v| {
+            v.layer != first.layer || v.color != first.color || v.light != first.light
+        })
     {
         return None;
     }
-    // Both triangles must face +Y. A reversed face would disappear with
-    // backface culling if combined with normal top-facing geometry.
-    let a = [q[1].pos[0] - q[0].pos[0], q[1].pos[2] - q[0].pos[2]];
-    let b = [q[2].pos[0] - q[0].pos[0], q[2].pos[2] - q[0].pos[2]];
-    if a[1] * b[0] - a[0] * b[1] <= 0.0 {
-        return None;
-    }
-    let state_id = *scratch.padded.blocks.get(pi(x as i32, plane - 1, z as i32))?;
+
+    let block = face.block_coords()?;
+    let state_id = *scratch.padded.blocks.get(pi(block[0], block[1], block[2]))?;
     let state = mesher.tables.info.get(state_id as usize)?;
     if !state.opaque_cube
         || state.block_entity
@@ -101,17 +75,12 @@ fn candidate(
     {
         return None;
     }
-    let mut corners = [[0u8; 2]; 4];
-    for (i, vertex) in q.iter().enumerate() {
-        let (sx, sz) = (vertex.pos[0] - x as f32, vertex.pos[2] - z as f32);
-        if (sx != 0.0 && sx != 1.0) || (sz != 0.0 && sz != 1.0) {
-            return None;
-        }
-        corners[i] = [sx as u8, sz as u8];
-    }
+
+    let corners = face.unit_corners(&q.map(|v| v.pos))?;
     let uv = q.map(|v| v.uv);
-    super::greedymeshing_core::expand_2x2_uv(&corners, &uv, 1, 1)?;
+    greedymeshing_core::expand_2x2_uv(&corners, &uv, 1, 1)?;
     Some(Signature {
+        normal: face.sign,
         layer: first.layer,
         color: first.color,
         light: first.light,
@@ -120,23 +89,21 @@ fn candidate(
     })
 }
 
-fn occupy(
-    plane: &mut Plane,
-    (x0, x1, z0, z1): (usize, usize, usize, usize),
-    eligible: Option<usize>,
-) {
-    for z in z0..z1 {
-        for x in x0..x1 {
-            let cell = &mut plane.cells[z * 16 + x];
+/// Occupancy is shared for *both* normals on one physical plane. This rejects
+/// double-sided blocks, decals and coplanar overlays instead of swallowing
+/// or reordering them in the replacement geometry.
+fn occupy(plane: &mut Plane, face: FacePlane, eligible: Option<usize>) {
+    for v in face.v0..face.v1 {
+        for u in face.u0..face.u1 {
+            let cell = &mut plane.cells[usize::from(v) * 16 + usize::from(u)];
             cell.count = cell.count.saturating_add(1);
             cell.source = if cell.count == 1 { eligible } else { None };
         }
     }
 }
 
-/// Called once after the normal mesher finishes, and before the caller sorts
-/// solid quads into orientation buckets. This operates only on the mesh's
-/// opaque solid list and leaves the original faces unchanged on every fallback.
+/// Native post-mesh compaction. Starling still performs its own per-section
+/// visibility, block-light bookkeeping, sprite list and orientation sorting.
 pub(super) fn compact(mesh: &mut SectionMesh, mesher: &Mesher<'_>, scratch: &MeshScratch) {
     if mesh.solid.len() < 8
         || mesher.shader_pack_lighting
@@ -146,39 +113,36 @@ pub(super) fn compact(mesh: &mut SectionMesh, mesher: &Mesher<'_>, scratch: &Mes
     {
         return;
     }
-    let mut planes: BTreeMap<i32, Plane> = BTreeMap::new();
-    let mut signatures: HashMap<usize, Signature> = HashMap::new();
-    let solid = mesh.solid.as_chunks::<4>().0;
 
-    for (index, q) in solid.iter().enumerate() {
-        let Some((plane, x0, x1, z0, z1)) = coverage(q) else {
+    let solid = mesh.solid.as_chunks::<4>().0;
+    let mut planes: BTreeMap<(u8, i32), Plane> = BTreeMap::new();
+    let mut signatures: HashMap<usize, Signature> = HashMap::new();
+
+    for (index, quad) in solid.iter().enumerate() {
+        let Some(face) = coverage(quad) else {
             continue;
         };
-        let sig = if x1 - x0 == 1 && z1 - z0 == 1 {
-            candidate(q, plane, x0, z0, mesher, scratch)
-        } else {
-            None
-        };
+        let sig = candidate(quad, face, mesher, scratch);
         if let Some(sig) = sig {
             signatures.insert(index, sig);
         }
         occupy(
-            planes.entry(plane).or_default(),
-            (x0, x1, z0, z1),
+            planes.entry((face.axis, face.plane)).or_default(),
+            face,
             sig.map(|_| index),
         );
     }
-    // A translucent or cutout overlay at the same integer plane cannot be
-    // swallowed or reordered by the merging of its opaque base.
-    for q in mesh.translucent.as_chunks::<4>().0 {
-        if let Some((plane, x0, x1, z0, z1)) = coverage(q) {
-            occupy(planes.entry(plane).or_default(), (x0, x1, z0, z1), None);
+    // Non-solid material at the exact same plane always prevents a merge.
+    for quad in mesh.translucent.as_chunks::<4>().0 {
+        if let Some(face) = coverage(quad) {
+            occupy(planes.entry((face.axis, face.plane)).or_default(), face, None);
         }
     }
 
     let mut dropped = vec![false; solid.len()];
-    let mut replacement: HashMap<usize, [TerrainVertex; 4]> = HashMap::new();
-    for (plane_y, plane) in planes {
+    let mut replacements = HashMap::<usize, [TerrainVertex; 4]>::new();
+
+    for ((axis, plane_at), plane) in planes {
         let mut keys = [None; 256];
         let mut intern = HashMap::<Signature, u64>::new();
         for (cell_index, cell) in plane.cells.iter().enumerate() {
@@ -197,54 +161,61 @@ pub(super) fn compact(mesh: &mut SectionMesh, mesher: &Mesher<'_>, scratch: &Mes
             };
             keys[cell_index] = Some(id);
         }
-        for rect in super::greedymeshing_core::merge_plane_limited(&keys, 2, 2) {
+
+        for rect in greedymeshing_core::merge_plane_limited(&keys, 2, 2) {
             if rect.width == 1 && rect.height == 1 {
                 continue;
             }
-            let start = rect.row as usize * 16 + rect.col as usize;
-            let Some(base_index) = plane.cells[start].source else {
+            let first_cell = usize::from(rect.row) * 16 + usize::from(rect.col);
+            let Some(first_index) = plane.cells[first_cell].source else {
                 continue;
             };
-            let Some(sig) = signatures.get(&base_index) else {
+            let Some(signature) = signatures.get(&first_index) else {
                 continue;
             };
-            let Some(uv) = super::greedymeshing_core::expand_2x2_uv(
-                &sig.corners,
-                &sig.uv,
+            let Some(uv) = greedymeshing_core::expand_2x2_uv(
+                &signature.corners,
+                &signature.uv,
                 rect.width,
                 rect.height,
             ) else {
                 continue;
             };
-            let mut quad = solid[base_index];
+            let mut quad = solid[first_index];
+            let (u_axis, v_axis) = match axis {
+                0 => (1, 2),
+                1 => (0, 2),
+                2 => (0, 1),
+                _ => unreachable!(),
+            };
             for i in 0..4 {
-                quad[i].pos = [
-                    rect.col as f32 + f32::from(sig.corners[i][0]) * f32::from(rect.width),
-                    plane_y as f32,
-                    rect.row as f32 + f32::from(sig.corners[i][1]) * f32::from(rect.height),
-                ];
+                quad[i].pos[usize::from(axis)] = plane_at as f32;
+                quad[i].pos[u_axis] = f32::from(rect.col)
+                    + f32::from(signature.corners[i][0]) * f32::from(rect.width);
+                quad[i].pos[v_axis] = f32::from(rect.row)
+                    + f32::from(signature.corners[i][1]) * f32::from(rect.height);
                 quad[i].uv = uv[i];
             }
-            replacement.insert(base_index, quad);
-            for z in rect.row..rect.row + rect.height {
-                for x in rect.col..rect.col + rect.width {
-                    let index = usize::from(z) * 16 + usize::from(x);
-                    if let Some(source) = plane.cells[index].source {
-                        if source != base_index {
-                            dropped[source] = true;
+            replacements.insert(first_index, quad);
+            for v in rect.row..rect.row + rect.height {
+                for u in rect.col..rect.col + rect.width {
+                    let cell = usize::from(v) * 16 + usize::from(u);
+                    if let Some(other) = plane.cells[cell].source {
+                        if other != first_index {
+                            dropped[other] = true;
                         }
                     }
                 }
             }
         }
     }
-    if replacement.is_empty() {
+    if replacements.is_empty() {
         return;
     }
     let mut merged = Vec::with_capacity(mesh.solid.len());
     for (index, quad) in solid.iter().enumerate() {
         if !dropped[index] {
-            merged.extend_from_slice(replacement.get(&index).unwrap_or(quad));
+            merged.extend_from_slice(replacements.get(&index).unwrap_or(quad));
         }
     }
     mesh.solid = merged;
