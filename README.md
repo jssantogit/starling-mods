@@ -9,6 +9,7 @@ Community workspace for **independent performance-mod adaptations for [Starling]
 | Mod / inspiration | Scope | Status |
 | --- | --- | --- |
 | [BadOptimizations](mods/badoptimizations/README.md) | Investigate avoiding redundant lightmap updates, idle debug work | **Research** (no source bundle) |
+| [Greedy Meshing](mods/greedymeshing/README.md) | Port original face-rectangle sweep to nearby chunk meshes | **Rust core prototype only** (no working .hnmod) |
 | Gnetum | Check HUD update costs against existing Starling code | Backlog |
 | Particle Core | Investigate particle update overhead beyond existing culling | Backlog |
 | C2ME | Evaluate chunk task scheduling (large, engine-level changes) | Backlog |
