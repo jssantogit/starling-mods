@@ -1,0 +1,32 @@
+name: Greedy Meshing Rust core
+on:
+  push:
+    branches:
+      - feat/greedymeshing-feasibility
+    paths:
+      - '.github/workflows/greedymeshing-core.yml'
+      - 'mods/greedymeshing/**'
+      - 'tests/rust/greedymeshing-core/**'
+  pull_request:
+    paths:
+      - '.github/workflows/greedymeshing-core.yml'
+      - 'mods/greedymeshing/**'
+      - 'tests/rust/greedymeshing-core/**'
+permissions:
+  contents: read
+jobs:
+  core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          components: rustfmt
+      - name: Test Greedy Meshing 16x16 face sweep
+        run: cargo test --offline --manifest-path tests/rust/greedymeshing-core/Cargo.toml
+      - name: Rustfmt
+        run: cargo fmt --manifest-path tests/rust/greedymeshing-core/Cargo.toml -- --check
