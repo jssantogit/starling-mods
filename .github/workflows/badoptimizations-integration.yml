@@ -58,6 +58,10 @@ jobs:
             --workspace upstream/starling \
             --mods mods/badoptimizations/native/mixins \
             --out target/badoptimizations-stage
+      - name: Check modified renderer compiles (Linux host)
+        run: |
+          cargo check --locked --manifest-path target/badoptimizations-stage/Cargo.toml \\
+            -p horizon-client-render --no-default-features
       - name: Save mixin plan for review
         if: always()
         uses: actions/upload-artifact@v4
