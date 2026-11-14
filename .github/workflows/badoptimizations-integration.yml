@@ -32,6 +32,18 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.95.0'
+      - name: Remove source-documentation symlinks from disposable checkout
+        run: |
+          # horizon-mixins refuses symlinks in its staged source tree.
+          # CLAUDE.md is a documentation alias, not an engine input.
+          test -L upstream/starling/CLAUDE.md
+          rm upstream/starling/CLAUDE.md
+          # Fail if some other symlink requires a deliberate audit.
+          if find upstream/starling -type l -print -quit | grep -q .; then
+            echo 'Unexpected Starling symlinks in staging tree' >&2
+            find upstream/starling -type l
+            exit 1
+          fi
       - name: Resolve source hooks against actual Starling renderer
         run: |
           cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
