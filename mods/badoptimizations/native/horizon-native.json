@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "id": "badoptimizations",
+  "version": "0.1.0-alpha.1",
+  "game": "26.3",
+  "horizon": "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2",
+  "mixins": "ddd9700b21997c95d95ac6ee5ecafe3830cf622a"
+}
