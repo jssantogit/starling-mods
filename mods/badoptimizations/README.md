@@ -1,6 +1,6 @@
 # BadOptimizations → Starling (26.3)
 
-**Status: experimental native *source prototype*. Mixin plan/apply and Linux plus Android ARM64 Cargo checks have passed in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43616775207). A final Android library build, launch/gameplay test and performance benchmarks have NOT been completed. Do not publish it as a working optimization yet.**
+**Status: experimental native *source prototype*. All combined mixins (lightmap, particles and FOV) passed plan/apply and Linux plus Android ARM64 Cargo checks in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43618551353). A final Android library build, launch/gameplay test and performance benchmarks have NOT been completed. Do not publish it as a working optimization yet.**
 
 ## Provenance
 
@@ -45,7 +45,7 @@ Passing standalone tests and ZIP validation does **not** prove the Rust hooks re
 
 - [x] Identify original source revision, license, and concrete Starling target.
 - [x] Implement first source-level caching algorithm and isolated cache/packaging tests.
-- [x] Validate Horizon Mixins plan/apply and staged Rust checks on Linux + Android ARM64 for Starling `09fa16c` ([CI](https://github.com/jssantogit/starling-mods/actions/runs/43616775207)).
+- [x] Validate Horizon Mixins plan/apply and staged Rust checks on Linux + Android ARM64 for Starling `09fa16c` ([combined CI](https://github.com/jssantogit/starling-mods/actions/runs/43618551353)).
 - [ ] Compile through Starling's ARM64 native-build path, boot and reload graphics.
 - [ ] Parity-test day/night, dimensions, underwater, gamma, darkness/night vision, other mod hooks and shaders.
 - [ ] Measure CPU work saved, median/P99 frame times, memory use and thermal behavior against the pinned stock build.
