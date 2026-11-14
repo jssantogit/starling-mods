@@ -62,6 +62,11 @@ jobs:
         run: |
           cargo check --locked --manifest-path target/badoptimizations-stage/Cargo.toml \
             -p horizon-client-render --no-default-features
+      - name: Cross-check renderer for Android ARM64 (no APK)
+        run: |
+          rustup target add aarch64-linux-android
+          cargo check --locked --manifest-path target/badoptimizations-stage/Cargo.toml \
+            -p horizon-client-render --no-default-features --target aarch64-linux-android
       - name: Save mixin plan for review
         if: always()
         uses: actions/upload-artifact@v4
