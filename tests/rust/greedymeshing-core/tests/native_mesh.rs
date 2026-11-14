@@ -70,11 +70,15 @@ mod mesher {
             "/../../../mods/greedymeshing/native/mixins/greedymeshing/runtime.rs"
         ));
     }
+
+    pub fn compact_test(mesh: &mut SectionMesh, mesher: &Mesher<'_>, scratch: &MeshScratch) {
+        greedymeshing_runtime::compact(mesh, mesher, scratch);
+    }
 }
 
 use mesher::{MeshScratch, MeshTables, Mesher, OPAQUE_LAYER, Padded, RenderAssets, SectionMesh, TerrainVertex, Info};
 use mesher::greedymeshing_core::project_quad;
-use mesher::greedymeshing_runtime::compact;
+use mesher::compact_test;
 
 fn solid_state() -> Info {
     Info {
@@ -142,7 +146,7 @@ fn run(mesh: &mut SectionMesh, scratch: &MeshScratch, pack_lighting: bool, conne
         render: &render,
         tables: &tables,
     };
-    compact(mesh, &mesher, scratch);
+    compact_test(mesh, &mesher, scratch);
 }
 
 #[test]
@@ -173,7 +177,8 @@ fn opposite_normals_are_not_interleaved_into_one_quad() {
     mesh.solid.extend_from_slice(&another);
     run(&mut mesh, &scratch, false, false);
     assert_eq!(mesh.solid.len(), 8, "one merged top plus one bottom face");
-    let first = project_quad(&mesh.solid[0..4].try_into().unwrap()).is_some();
+    let first_quad: [TerrainVertex; 4] = mesh.solid[0..4].try_into().unwrap();
+    let first = project_quad(&first_quad.map(|vertex| vertex.pos)).is_some();
     assert!(first);
 }
 
