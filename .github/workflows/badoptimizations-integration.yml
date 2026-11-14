@@ -70,12 +70,13 @@ jobs:
           test -x "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
           cargo install cargo-ndk --version 3.5.4 --locked
       - name: Cross-check renderer for Android ARM64 (no APK)
+        working-directory: target/badoptimizations-stage
         run: |
           rustup target add aarch64-linux-android
-          # cargo-ndk selects the NDK compiler/linker/archiver for ring et al.
+          # cargo-ndk needs to discover Cargo.toml in its working directory
+          # before forwarding check's arguments to Cargo.
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
           cargo ndk -t arm64-v8a --platform 26 check --locked \
-            --manifest-path target/badoptimizations-stage/Cargo.toml \
             -p horizon-client-render --no-default-features
       - name: Save mixin plan for review
         if: always()

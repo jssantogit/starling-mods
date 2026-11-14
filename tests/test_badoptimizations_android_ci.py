@@ -22,5 +22,13 @@ class AndroidCrossCompileWorkflowTests(unittest.TestCase):
         self.assertIn("cargo ndk -t arm64-v8a --platform 26 check --locked", workflow)
 
 
+    def test_cargo_ndk_discovers_staged_cargo_workspace(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("working-directory: target/badoptimizations-stage", workflow)
+        self.assertNotIn(
+            "--manifest-path target/badoptimizations-stage/Cargo.toml \\",
+            workflow.split("- name: Cross-check renderer for Android ARM64 (no APK)")[1],
+        )
+
 if __name__ == "__main__":
     unittest.main()
