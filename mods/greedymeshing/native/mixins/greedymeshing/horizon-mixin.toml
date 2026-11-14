@@ -23,7 +23,7 @@ source = "runtime.rs"
 [[injection]]
 id = "compact-near-chunk-top-faces"
 kind = "RETURN"
-target = "horizon_client_render::mesher::Mesher::mesh_reusing"
+target = "horizon_client_render::mesher::Mesher<'_>::mesh_reusing"
 helper = "after.rs"
 bindings = [
   { name = "result", ty = "crate::mesher::SectionMesh", value = "$value" },
