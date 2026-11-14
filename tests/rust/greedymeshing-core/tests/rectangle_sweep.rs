@@ -1,4 +1,4 @@
-use starling_greedymeshing_core::{Rect, merge_plane};
+use starling_greedymeshing_core::{Rect, merge_plane, merge_plane_limited};
 
 fn reconstruct(original: &[Option<u64>; 256], rects: &[Rect]) {
     let mut actual = [None; 256];
@@ -110,4 +110,33 @@ fn seeded_property_sweep_never_loses_or_overlaps_faces() {
         });
         reconstruct(&faces, &merge_plane(&faces));
     }
+}
+
+#[test]
+fn small_rectangle_limit_keeps_minecraft_uvs_representable() {
+    let faces = [Some(19u64); 256];
+    let merged = merge_plane_limited(&faces, 2, 2);
+    assert_eq!(merged.len(), 64);
+    assert!(merged.iter().all(|q| q.width == 2 && q.height == 2));
+    reconstruct(&faces, &merged);
+}
+
+#[test]
+fn limited_sweep_can_handle_narrow_patterns() {
+    let mut faces = [None; 256];
+    for row in 0..16 {
+        for col in 0..16 {
+            faces[row * 16 + col] = Some((row / 3 + col / 5) as u64);
+        }
+    }
+    let rects = merge_plane_limited(&faces, 2, 2);
+    reconstruct(&faces, &rects);
+}
+
+#[test]
+fn one_by_one_limit_preserves_each_unit_face() {
+    let faces = [Some(0); 256];
+    let rects = merge_plane_limited(&faces, 1, 1);
+    assert_eq!(rects.len(), 256);
+    reconstruct(&faces, &rects);
 }
