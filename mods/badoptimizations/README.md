@@ -13,7 +13,7 @@
 
 The original Java mod's lightmap optimization avoids redundant texture computation. Starling *already* skips unchanged GPU uploads in `crates/horizon-client-render/src/gfx.rs`, `Renderer::update_lightmap`. But it still recalculates all 256 pixels before comparing them each render call.
 
-The prototype injects a cancellable `HEAD` into `Renderer::update_lightmap`, with a `RETURN` observer, to skip the original CPU calculation **only when the renderer instance's cache key and output bytes match what was previously computed and uploaded**. The per-renderer cache is installed through Horizon Mixins' `[[state]]`, avoiding process-global state. This intentionally does **not** change the GPU-upload logic.
+The prototype injects a cancellable `HEAD` into `Renderer::update_lightmap`, with a `RETURN` observer, to skip the original CPU calculation **only when the last-seen renderer identity, cache key and output bytes match what was previously computed and uploaded**. The cache is thread-local and remembers the last renderer identity. This avoids modifying the asynchronous `Renderer::new` constructor (unsupported by the current mixin state-injection mechanism) and prevents reuse across renderers. This intentionally does **not** change the GPU-upload logic.
 
 Key inputs are every value read by the current method: environment's ambient colour (RGB), sky light colour (RGB), block light tint (RGB), sky light factor, darkness, gamma, night vision, flicker, boss darkening and `fullbright`. Comparison uses exact float bits. The first render, device reset, changed inputs, changed stored pixels and an uninitialized texture always execute the original code.
 
@@ -22,8 +22,8 @@ Key inputs are every value read by the current method: environment's ambient col
 ## Layout
 
 - `native/horizon-native.json`: pinned native bundle metadata.
-- `native/mixins/badoptimizations/horizon-mixin.toml`: typed source targets, renderer state and HEAD/RETURN hooks.
-- `native/mixins/badoptimizations/runtime.rs`: independent cache implementation and 7 Rust unit tests.
+- `native/mixins/badoptimizations/horizon-mixin.toml`: typed source targets, thread-local cache and HEAD/RETURN hooks.
+- `native/mixins/badoptimizations/runtime.rs`: independent cache implementation and 9 Rust unit tests.
 - `native/mixins/badoptimizations/{before,after}.rs`: adapters to Starling's renderer.
 - `tests/rust/lightmap-cache/Cargo.toml`: standalone Cargo test harness, using the **same** `runtime.rs` included by the mixin.
 - `tests/test_badoptimizations.py`: Python metadata, wiring and package tests.

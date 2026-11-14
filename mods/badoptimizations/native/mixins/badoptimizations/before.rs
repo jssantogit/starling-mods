@@ -22,10 +22,10 @@ fn badoptimizations_before_lightmap(
         boss_darken,
         renderer.fullbright,
     );
-    if renderer
-        .__horizon_mixins_badoptimizations_lightmap_cache()
-        .can_skip(key, &renderer.lightmap_pixels, renderer.lightmap_uploaded)
-    {
+    let renderer_id = renderer as *const crate::gfx::Renderer as usize;
+    if crate::gfx::badoptimizations::can_skip(
+        renderer_id, key, &renderer.lightmap_pixels, renderer.lightmap_uploaded,
+    ) {
         core::ops::ControlFlow::Break(())
     } else {
         core::ops::ControlFlow::Continue(())

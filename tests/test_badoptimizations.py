@@ -22,11 +22,9 @@ class BadOptimizationsWiringTests(unittest.TestCase):
         self.assertEqual(spec['mod']['version'], info['version'])
         self.assertEqual(spec['compatibility']['horizon_revision'], STARLING_REV)
 
-    def test_target_and_per_instance_cache_declared(self):
+    def test_target_and_thread_local_cache_declared(self):
         spec = tomllib.loads((MOD / 'mixins/badoptimizations/horizon-mixin.toml').read_text())
-        self.assertEqual(len(spec['state']), 1)
-        self.assertEqual(spec['state'][0]['target'], 'horizon_client_render::gfx::Renderer')
-        self.assertEqual(spec['state'][0]['constructor'][0]['target'], 'horizon_client_render::gfx::Renderer::new')
+        self.assertNotIn('state', spec, 'async Renderer::new cannot be a mixin state constructor')
         injection = spec['injection']
         self.assertEqual([x['kind'] for x in injection], ['HEAD', 'RETURN'])
         self.assertTrue(injection[0]['cancellable'])

@@ -40,6 +40,7 @@ impl Key {
 }
 
 pub(crate) struct Cache {
+    renderer_id: Option<usize>,
     key: Option<Key>,
     pixels: [u8; LIGHTMAP_BYTES],
 }
@@ -47,6 +48,7 @@ pub(crate) struct Cache {
 impl Default for Cache {
     fn default() -> Self {
         Self {
+            renderer_id: None,
             key: None,
             pixels: [0u8; LIGHTMAP_BYTES],
         }
@@ -56,18 +58,34 @@ impl Default for Cache {
 impl Cache {
     // A new instance or an uninitialized GPU texture MUST run the original.
     // Observing output bytes protects against mutations by other render hooks.
-    pub(crate) fn can_skip(&self, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) -> bool {
-        uploaded && self.key == Some(key) && &self.pixels == pixels
+    pub(crate) fn can_skip(&self, renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) -> bool {
+        uploaded && self.renderer_id == Some(renderer_id) && self.key == Some(key) && &self.pixels == pixels
     }
 
-    pub(crate) fn remember(&mut self, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) {
+    pub(crate) fn remember(&mut self, renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) {
         if uploaded {
+            self.renderer_id = Some(renderer_id);
             self.key = Some(key);
             self.pixels.copy_from_slice(pixels);
         } else {
+            self.renderer_id = None;
             self.key = None;
         }
     }
+}
+
+// Last-used renderer per thread: a second renderer only causes a cache miss.
+// No global mutex or extra field in an async-constructed Renderer.
+thread_local! {
+    static LAST: std::cell::RefCell<Cache> = std::cell::RefCell::new(Cache::default());
+}
+
+pub(crate) fn can_skip(renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) -> bool {
+    LAST.with(|cache| cache.borrow().can_skip(renderer_id, key, pixels, uploaded))
+}
+
+pub(crate) fn remember(renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) {
+    LAST.with(|cache| cache.borrow_mut().remember(renderer_id, key, pixels, uploaded))
 }
 
 #[cfg(test)]
@@ -93,18 +111,18 @@ mod tests {
     fn first_render_and_unuploaded_texture_must_run() {
         let mut cache = Cache::default();
         let pixels = [255u8; LIGHTMAP_BYTES];
-        assert!(!cache.can_skip(key(), &pixels, false));
-        assert!(!cache.can_skip(key(), &pixels, true));
-        cache.remember(key(), &pixels, true);
-        assert!(!cache.can_skip(key(), &pixels, false));
+        assert!(!cache.can_skip(100, key(), &pixels, false));
+        assert!(!cache.can_skip(100, key(), &pixels, true));
+        cache.remember(100, key(), &pixels, true);
+        assert!(!cache.can_skip(100, key(), &pixels, false));
     }
 
     #[test]
     fn repeat_with_identical_inputs_and_uploaded_pixels_can_skip() {
         let mut cache = Cache::default();
         let pixels = [12u8; LIGHTMAP_BYTES];
-        cache.remember(key(), &pixels, true);
-        assert!(cache.can_skip(key(), &pixels, true));
+        cache.remember(100, key(), &pixels, true);
+        assert!(cache.can_skip(100, key(), &pixels, true));
     }
 
     #[test]
@@ -116,8 +134,8 @@ mod tests {
             assert_ne!(original, changed, "key element {index} must invalidate");
             let mut cache = Cache::default();
             let pixels = [0; LIGHTMAP_BYTES];
-            cache.remember(original, &pixels, true);
-            assert!(!cache.can_skip(changed, &pixels, true));
+            cache.remember(100, original, &pixels, true);
+            assert!(!cache.can_skip(100, changed, &pixels, true));
         }
     }
 
@@ -134,8 +152,8 @@ mod tests {
         let first = [3u8; LIGHTMAP_BYTES];
         let mut changed = first;
         changed[42] = 4;
-        cache.remember(key(), &first, true);
-        assert!(!cache.can_skip(key(), &changed, true));
+        cache.remember(100, key(), &first, true);
+        assert!(!cache.can_skip(100, key(), &changed, true));
     }
 
     #[test]
@@ -143,17 +161,38 @@ mod tests {
         let a = Cache::default();
         let mut b = Cache::default();
         let pixels = [7u8; LIGHTMAP_BYTES];
-        b.remember(key(), &pixels, true);
-        assert!(!a.can_skip(key(), &pixels, true));
-        assert!(b.can_skip(key(), &pixels, true));
+        b.remember(100, key(), &pixels, true);
+        assert!(!a.can_skip(100, key(), &pixels, true));
+        assert!(b.can_skip(100, key(), &pixels, true));
     }
 
     #[test]
     fn invalidated_upload_resets_previous_key() {
         let mut cache = Cache::default();
         let pixels = [17u8; LIGHTMAP_BYTES];
-        cache.remember(key(), &pixels, true);
-        cache.remember(key(), &pixels, false);
-        assert!(!cache.can_skip(key(), &pixels, true));
+        cache.remember(100, key(), &pixels, true);
+        cache.remember(100, key(), &pixels, false);
+        assert!(!cache.can_skip(100, key(), &pixels, true));
     }
+    #[test]
+    fn a_different_renderer_identity_never_reuses_a_lightmap() {
+        let mut cache = Cache::default();
+        let pixels = [5u8; LIGHTMAP_BYTES];
+        cache.remember(100, key(), &pixels, true);
+        assert!(!cache.can_skip(200, key(), &pixels, true));
+        cache.remember(200, key(), &pixels, true);
+        assert!(!cache.can_skip(100, key(), &pixels, true));
+        assert!(cache.can_skip(200, key(), &pixels, true));
+    }
+
+    #[test]
+    fn thread_local_last_renderer_identity_changes_on_switch() {
+        let pixels = [42u8; LIGHTMAP_BYTES];
+        remember(100, key(), &pixels, true);
+        assert!(can_skip(100, key(), &pixels, true));
+        remember(200, key(), &pixels, true);
+        assert!(!can_skip(100, key(), &pixels, true));
+        assert!(can_skip(200, key(), &pixels, true));
+    }
+
 }

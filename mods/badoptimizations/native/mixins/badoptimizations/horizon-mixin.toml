@@ -7,24 +7,13 @@ priority = 100
 # Starling commit, not a tag or the old Horizon source revision.
 horizon_revision = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
 
-# Cache state is attached to each Renderer. Rebuilding the graphics device
-# creates a fresh, uninitialized cache.
+# Thread-local cache only tracks the last renderer pointer and guards against
+# stale output. Async Renderer::new cannot be a [[state.constructor]] target.
 [[module]]
 id = "runtime"
 file = "crates/horizon-client-render/src/gfx.rs"
 name = "badoptimizations"
 source = "runtime.rs"
-
-[[state]]
-id = "lightmap_cache"
-target = "horizon_client_render::gfx::Renderer"
-ty = "crate::gfx::badoptimizations::Cache"
-initial = "::core::default::Default::default()"
-
-[[state.constructor]]
-target = "horizon_client_render::gfx::Renderer::new"
-selector = "Self"
-require = 1
 
 [[injection]]
 id = "skip-unchanged-lightmap"

@@ -23,10 +23,9 @@ fn badoptimizations_after_lightmap(
         boss_darken,
         renderer.fullbright,
     );
-    let pixels = renderer.lightmap_pixels;
-    let uploaded = renderer.lightmap_uploaded;
-    renderer
-        .__horizon_mixins_badoptimizations_lightmap_cache_mut()
-        .remember(key, &pixels, uploaded);
+    let renderer_id = renderer as *const crate::gfx::Renderer as usize;
+    crate::gfx::badoptimizations::remember(
+        renderer_id, key, &renderer.lightmap_pixels, renderer.lightmap_uploaded,
+    );
     result
 }
