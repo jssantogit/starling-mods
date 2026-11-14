@@ -1,0 +1,150 @@
+name: Build Starling Dev APK with BadOptimizations
+
+# Build an installable APK using our own GitHub runner, no Starling gateway.
+on:
+  push:
+    branches:
+      - feat/build-starling-dev-apk
+    paths:
+      - '.github/workflows/build-starling-dev-apk.yml'
+      - 'mods/badoptimizations/native/**'
+      - 'tools/verify_starling_apk.py'
+      - 'tests/test_verify_starling_apk.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-dev-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout our native mod source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Checkout exactly the Starling source revision supported by the mod
+        uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run tests and enforce source compatibility
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          expected = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+          actual = subprocess.check_output(
+              ["git", "-C", "upstream/starling", "rev-parse", "HEAD"],
+              text=True
+          ).strip()
+          mod = json.loads(Path("mods/badoptimizations/native/horizon-native.json").read_text())
+          assert actual == expected == mod["horizon"], "Mod and game revisions disagree"
+          assert mod["id"] == "badoptimizations"
+          assert mod["version"] == "0.1.0-alpha.2"
+          assert mod["game"] == "26.3"
+          PY
+
+      - name: Install required Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Install official Starling Android build dependencies
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "build-tools;35.0.0" "platforms;android-36" "ndk;28.2.13676358" > /dev/null
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+
+      - name: Install Rust and cargo-ndk
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
+          rustup default 1.95.0
+          cargo install cargo-ndk --version 3.5.4 --locked
+
+      - name: Prepare memory for native link
+        run: |
+          set -e
+          where=/mnt
+          avail=$(df --output=avail -BG "$where" | tail -1 | tr -dc 0-9)
+          if [ "$avail" -lt 12 ]; then
+            where="$RUNNER_TEMP"
+            avail=$(df --output=avail -BG "$where" | tail -1 | tr -dc 0-9)
+          fi
+          if [ "$avail" -ge 12 ]; then
+            sudo fallocate -l 8G "$where/starling-build.swap"
+            sudo chmod 600 "$where/starling-build.swap"
+            sudo mkswap "$where/starling-build.swap" >/dev/null
+            sudo swapon "$where/starling-build.swap" || echo "Swap unavailable; using 2 build jobs"
+          fi
+          free -h
+          df -h
+
+      - name: Compile BadOptimizations and the Starling Dev APK
+        env:
+          ABI: arm64-v8a
+          PROFILE: quick
+          VARIANT: --dev
+          CARGO_BUILD_JOBS: '2'
+        run: |
+          set -euo pipefail
+          export NATIVE_CACHE="$RUNNER_TEMP/starling-native-cache"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          bash upstream/starling/packaging/android/native_build.sh \
+            "$GITHUB_WORKSPACE/upstream/starling" \
+            "$GITHUB_WORKSPACE/build-output" \
+            "$GITHUB_WORKSPACE/mods/badoptimizations/native/mixins/badoptimizations" \
+            2>&1 | tee "$GITHUB_WORKSPACE/build-starling-dev.log"
+
+      - name: Verify APK, native code and debug signature
+        run: |
+          set -euo pipefail
+          apk=$(find build-output -maxdepth 1 -type f -name 'starling-dev-*-arm64-v8a.apk' -print -quit)
+          test -n "$apk"
+          python3 tools/verify_starling_apk.py \
+            --manifest build-output/build.json \
+            --library build-output/libhorizon_android.so \
+            --apk "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump packagename "$apk" | grep -F 'io.github.juanluci.starling.dev'
+
+      - name: Package corresponding native source archive
+        run: |
+          python3 tools/package_hnmod.py mods/badoptimizations/native \
+            --output build-output/badoptimizations-0.1.0-alpha.2.hnmod
+
+      - name: Upload APK and build provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-dev-badoptimizations-arm64
+          path: |
+            build-output/starling-dev-*.apk
+            build-output/build.json
+            build-output/badoptimizations-*.hnmod
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Upload diagnostics if build fails
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-dev-build-diagnostics
+          path: |
+            build-starling-dev.log
+            build-output/build.json
+          retention-days: 7
+          if-no-files-found: ignore
