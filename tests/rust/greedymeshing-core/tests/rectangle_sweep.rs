@@ -1,4 +1,4 @@
-use starling_greedymeshing_core::{Rect, merge_plane, merge_plane_limited, expand_2x2_uv};
+use starling_greedymeshing_core::{Rect, expand_2x2_uv, merge_plane, merge_plane_limited};
 
 fn reconstruct(original: &[Option<u64>; 256], rects: &[Rect]) {
     let mut actual = [None; 256];
@@ -140,7 +140,6 @@ fn one_by_one_limit_preserves_each_unit_face() {
     assert_eq!(rects.len(), 256);
     reconstruct(&faces, &rects);
 }
-
 
 #[test]
 fn builtin_sampler_can_repeat_two_tiles_without_extra_vertex_bits() {

@@ -103,7 +103,6 @@ pub fn merge_plane_limited(cells: &[Option<u64>; 256], max_width: u8, max_height
     rectangles
 }
 
-
 /// Expand canonical unit-quad UV coordinates for at most a 2x2 merged face.
 ///
 /// The four corners are the source quad's winding order, each with a logical
@@ -123,18 +122,14 @@ pub fn expand_2x2_uv(
         return None;
     }
     let find = |target: [u8; 2]| corners.iter().position(|&p| p == target);
-    let (i00, i10, i01, i11) = (
-        find([0, 0])?,
-        find([1, 0])?,
-        find([0, 1])?,
-        find([1, 1])?,
-    );
+    let (i00, i10, i01, i11) = (find([0, 0])?, find([1, 0])?, find([0, 1])?, find([1, 1])?);
     if corners.iter().any(|p| p[0] > 1 || p[1] > 1) {
         return None;
     }
-    if [i00, i10, i01, i11].iter().any(|&i| {
-        [i00, i10, i01, i11].iter().filter(|&&j| j == i).count() != 1
-    }) {
+    if [i00, i10, i01, i11]
+        .iter()
+        .any(|&i| [i00, i10, i01, i11].iter().filter(|&&j| j == i).count() != 1)
+    {
         return None;
     }
     const STEP: i32 = 32768;
@@ -143,7 +138,10 @@ pub fn expand_2x2_uv(
     let mut axis_row = [false; 2];
 
     for channel in 0..2usize {
-        if packed_uv.iter().any(|uv| uv[channel] != 0 && uv[channel] != 32768) {
+        if packed_uv
+            .iter()
+            .any(|uv| uv[channel] != 0 && uv[channel] != 32768)
+        {
             return None;
         }
         let initial = i32::from(packed_uv[i00][channel]);
@@ -153,9 +151,7 @@ pub fn expand_2x2_uv(
         if opposite != initial + col + row {
             return None;
         }
-        if (col.abs(), row.abs()) != (STEP, 0)
-            && (col.abs(), row.abs()) != (0, STEP)
-        {
+        if (col.abs(), row.abs()) != (STEP, 0) && (col.abs(), row.abs()) != (0, STEP) {
             return None;
         }
         axis_col[channel] = col != 0;
