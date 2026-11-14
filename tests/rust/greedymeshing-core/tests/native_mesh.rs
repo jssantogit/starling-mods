@@ -76,9 +76,12 @@ mod mesher {
     }
 }
 
-use mesher::{MeshScratch, MeshTables, Mesher, OPAQUE_LAYER, Padded, RenderAssets, SectionMesh, TerrainVertex, Info};
-use mesher::greedymeshing_core::project_quad;
 use mesher::compact_test;
+use mesher::greedymeshing_core::project_quad;
+use mesher::{
+    Info, MeshScratch, MeshTables, Mesher, OPAQUE_LAYER, Padded, RenderAssets, SectionMesh,
+    TerrainVertex,
+};
 
 fn solid_state() -> Info {
     Info {
@@ -122,7 +125,9 @@ fn make_quad(axis: usize, sign: i8, u: u8, v: u8, level: u8) -> [TerrainVertex; 
 fn example(axis: usize, sign: i8, width: u8, height: u8) -> (SectionMesh, MeshScratch) {
     let mut mesh = SectionMesh::default();
     let mut scratch = MeshScratch {
-        padded: Padded { blocks: vec![0; 4096] },
+        padded: Padded {
+            blocks: vec![0; 4096],
+        },
     };
     for v in 4..4 + height {
         for u in 2..2 + width {
@@ -137,8 +142,12 @@ fn example(axis: usize, sign: i8, width: u8, height: u8) -> (SectionMesh, MeshSc
 }
 
 fn run(mesh: &mut SectionMesh, scratch: &MeshScratch, pack_lighting: bool, connected: bool) {
-    let tables = MeshTables { info: vec![solid_state(), solid_state()] };
-    let render = RenderAssets { connected: if connected { vec![1] } else { Vec::new() } };
+    let tables = MeshTables {
+        info: vec![solid_state(), solid_state()],
+    };
+    let render = RenderAssets {
+        connected: if connected { vec![1] } else { Vec::new() },
+    };
     let mesher = Mesher {
         shader_pack_lighting: pack_lighting,
         separate_ao: false,
@@ -185,7 +194,8 @@ fn opposite_normals_are_not_interleaved_into_one_quad() {
 #[test]
 fn coplanar_translucent_overlay_blocks_the_merge() {
     let (mut mesh, scratch) = example(1, 1, 2, 1);
-    mesh.translucent.extend_from_slice(&make_quad(1, -1, 2, 4, 7));
+    mesh.translucent
+        .extend_from_slice(&make_quad(1, -1, 2, 4, 7));
     run(&mut mesh, &scratch, false, false);
     assert_eq!(mesh.solid.len(), 8, "do not swallow overlaid surface");
     assert_eq!(mesh.translucent.len(), 4);
