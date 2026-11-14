@@ -28,6 +28,25 @@ pub struct Rect {
 /// An unbounded list of keys is supported: never silently discard materials
 /// when there are many distinct faces in one plane.
 pub fn merge_plane(cells: &[Option<u64>; 256]) -> Vec<Rect> {
+    merge_plane_limited(cells, 16, 16)
+}
+
+/// As `merge_plane`, but cap rectangles to an explicit maximum extent.
+///
+/// Starling's near-section packed 16-bit UVs can represent a range of almost
+/// two texture tiles, unlike its distant-LOD UVs. Limiting to 2×2 lets a
+/// cautious first integration reuse the existing WGSL tiled sampler without
+/// changing the shader layout. Larger rectangles need a separate UV encoding.
+/// The width/height arguments are inclusive limits, both in 1..=16.
+pub fn merge_plane_limited(
+    cells: &[Option<u64>; 256],
+    max_width: u8,
+    max_height: u8,
+) -> Vec<Rect> {
+    assert!((1..=16).contains(&max_width));
+    assert!((1..=16).contains(&max_height));
+    let max_width = usize::from(max_width);
+    let max_height = usize::from(max_height);
     let mut rectangles = Vec::new();
     // Only 16 columns per row: a u16 marks cells consumed by earlier rectangles.
     let mut consumed = [0u16; 16];
@@ -48,6 +67,7 @@ pub fn merge_plane(cells: &[Option<u64>; 256]) -> Vec<Rect> {
             // Same-key contiguous run to the right.
             let mut width = 1usize;
             while col + width < 16
+                && width < max_width
                 && consumed[row] & (1u16 << (col + width)) == 0
                 && cells[row * 16 + col + width] == Some(key)
             {
@@ -56,7 +76,7 @@ pub fn merge_plane(cells: &[Option<u64>; 256]) -> Vec<Rect> {
 
             // Extend the entire run down only while *every* face still matches.
             let mut height = 1usize;
-            'grow: while row + height < 16 {
+            'grow: while row + height < 16 && height < max_height {
                 for offset in 0..width {
                     let c = col + offset;
                     if consumed[row + height] & (1u16 << c) != 0
