@@ -1,6 +1,5 @@
 // HEAD of Renderer::update_lightmap. Same key and same uploaded pixels:
 // skip 256 pixel calculations; Starling's existing GPU upload cache remains.
-#[allow(clippy::too_many_arguments)]
 fn badoptimizations_before_lightmap(
     renderer: &mut crate::gfx::Renderer,
     sky: &crate::environment::Sky,

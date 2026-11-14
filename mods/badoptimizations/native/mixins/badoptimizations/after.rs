@@ -1,6 +1,5 @@
 // RETURN of Renderer::update_lightmap. Cache only the original method's
 // finished result. The HEAD cancellation also passes through RETURN safely.
-#[allow(clippy::too_many_arguments)]
 fn badoptimizations_after_lightmap(
     result: (),
     renderer: &mut crate::gfx::Renderer,

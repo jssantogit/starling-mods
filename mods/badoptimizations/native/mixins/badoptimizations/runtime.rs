@@ -58,11 +58,26 @@ impl Default for Cache {
 impl Cache {
     // A new instance or an uninitialized GPU texture MUST run the original.
     // Observing output bytes protects against mutations by other render hooks.
-    pub(crate) fn can_skip(&self, renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) -> bool {
-        uploaded && self.renderer_id == Some(renderer_id) && self.key == Some(key) && &self.pixels == pixels
+    pub(crate) fn can_skip(
+        &self,
+        renderer_id: usize,
+        key: Key,
+        pixels: &[u8; LIGHTMAP_BYTES],
+        uploaded: bool,
+    ) -> bool {
+        uploaded
+            && self.renderer_id == Some(renderer_id)
+            && self.key == Some(key)
+            && &self.pixels == pixels
     }
 
-    pub(crate) fn remember(&mut self, renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) {
+    pub(crate) fn remember(
+        &mut self,
+        renderer_id: usize,
+        key: Key,
+        pixels: &[u8; LIGHTMAP_BYTES],
+        uploaded: bool,
+    ) {
         if uploaded {
             self.renderer_id = Some(renderer_id);
             self.key = Some(key);
@@ -80,12 +95,26 @@ thread_local! {
     static LAST: std::cell::RefCell<Cache> = std::cell::RefCell::new(Cache::default());
 }
 
-pub(crate) fn can_skip(renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) -> bool {
+pub(crate) fn can_skip(
+    renderer_id: usize,
+    key: Key,
+    pixels: &[u8; LIGHTMAP_BYTES],
+    uploaded: bool,
+) -> bool {
     LAST.with(|cache| cache.borrow().can_skip(renderer_id, key, pixels, uploaded))
 }
 
-pub(crate) fn remember(renderer_id: usize, key: Key, pixels: &[u8; LIGHTMAP_BYTES], uploaded: bool) {
-    LAST.with(|cache| cache.borrow_mut().remember(renderer_id, key, pixels, uploaded))
+pub(crate) fn remember(
+    renderer_id: usize,
+    key: Key,
+    pixels: &[u8; LIGHTMAP_BYTES],
+    uploaded: bool,
+) {
+    LAST.with(|cache| {
+        cache
+            .borrow_mut()
+            .remember(renderer_id, key, pixels, uploaded)
+    })
 }
 
 #[cfg(test)]
@@ -174,6 +203,7 @@ mod tests {
         cache.remember(100, key(), &pixels, false);
         assert!(!cache.can_skip(100, key(), &pixels, true));
     }
+
     #[test]
     fn a_different_renderer_identity_never_reuses_a_lightmap() {
         let mut cache = Cache::default();
@@ -194,5 +224,4 @@ mod tests {
         assert!(!can_skip(100, key(), &pixels, true));
         assert!(can_skip(200, key(), &pixels, true));
     }
-
 }
