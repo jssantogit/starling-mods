@@ -2,7 +2,7 @@
 
 ## Verdict
 
-**Feasible as an engine-specific Rust port, not as a direct Fabric jar replacement; no gameplay-ready mod yet.** The core rectangle algorithm is portable. Applying it to Starling's *near* chunk meshes requires deliberate changes to material eligibility, per-vertex UV representation and shader support. This could need upstream-compatible renderer support rather than a simple HEAD hook. Do not infer FPS gains from a reduction in quad count.
+**Prototype integrated into pinned Starling; not gameplay-ready.** The core rectangle algorithm and conservative native post-mesh top-face adapter now pass `horizon-mixins plan/apply` and Linux `cargo check`. The adapter caps rectangles at 2×2 and reuses near-section UV encoding/tiled WGSL; larger rectangles, other face directions, shader-pack safety and Android in-game parity are still open. Do not infer FPS gains from a reduction in quad count.
 
 ## Exact sources reviewed
 
@@ -27,13 +27,16 @@
 
 - Rust `core.rs` performs a greedy rectangular sweep of one 16x16 plane of prevalidated visible face **keys**. It keeps missing/ineligible cells outside this path and cannot emit overlapping or out-of-bounds rectangles.
 - Standalone Rust tests cover uniform, mixed, empty, holed, checkerboard, 256 unique-key and deterministic randomized cases.
-- No source mixin, manifest, native build or renderer modifications yet. The core does NOT resolve eligibility, shaders, UVs or light by itself.
+- Added native source bundle at `mods/greedymeshing/native` with an explicit `RETURN` hook into `Mesher<'_>::mesh_reusing`, a tested shared `core.rs` and `runtime.rs`.
+- The runtime rejects non-solid, emissive, tinted, offset and non-canonical top faces, refuses overlapping/partial overlays, and merges at most 2×2 faces with identical UV orientation and packed light/color. It does not change other face directions, complex geometry or fluids.
+- Source hook plan/apply plus modified Linux renderer compilation passed in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43633951718). Android ARM64 cargo check, final library, test-world visual inspection, resource reload and performance benchmarking are not complete.
+- **Safety caveat:** this adapter skips some shader-pack-specific lighting modes and translucent-layer configurations, but old-lighting shader packs without those indicators may still be active; shader-pack fallback is therefore **not proven**. Do not release without fully gating on pack activity.
 
 ## Proposed native integration (follow-up, not implemented)
 
-1. Construct a conservative key while `Mesher::mesh_reusing` still has block state, baked-model and neighbour information. Do not simply merge arbitrary output quads after resource-pack adjustments.
-2. Use the core per direction/plane and emit actual merged `TerrainVertex` quads. Keep unmergeable faces in the original path.
-3. Extend or reuse WGSL UV tiling **with a distinct near-face signal**; never steal bits used by the existing layer/alpha/light encoding. Preserve mip derivatives, sprite phase and chunk-fade semantics.
+1. **Prototype done for top faces only:** construct eligibility using padded block state and already-baked quad data after `Mesher::mesh_reusing` finishes, refusing overlapping faces and noncanonical UVs. Expand eligibility only after full parity tests.
+2. **Prototype done for upward faces:** use the pure sweep on each horizontal integer plane and emit at most 2×2 merged `TerrainVertex` quads; all rejected faces stay on the original path. Extend to six directions after tests.
+3. **Limited 2×2 prototype:** reuse the existing WGSL tiled sampler because packed near-section `u16` UVs cannot represent a full 16-block repeated face; the endpoint 2.0 saturates to 65535. A distinct encoding/shader path is still required for larger rectangles, preserving mip derivatives, sprite phase and chunk-fade semantics.
 4. Verify both default pipeline and shader-pack fallback, smooth light, colored lighting, resource reload, biome tint, block overlays and section boundaries using prepared 26.3 resources and screenshot comparisons.
 5. Only then produce a native .hnmod/APK and measure the same world, build profile, resolution and shader settings with and without the port. Track quad counts and GPU frame time, not FPS alone.
 
