@@ -25,6 +25,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: '1.95.0'
+          components: rustfmt
       - name: Test Greedy Meshing 16x16 face sweep
         run: cargo test --offline --manifest-path tests/rust/greedymeshing-core/Cargo.toml
       - name: Rustfmt
