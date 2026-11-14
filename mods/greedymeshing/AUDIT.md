@@ -29,7 +29,7 @@
 - Standalone Rust tests cover uniform, mixed, empty, holed, checkerboard, 256 unique-key and deterministic randomized cases.
 - Added native source bundle at `mods/greedymeshing/native` with an explicit `RETURN` hook into `Mesher<'_>::mesh_reusing`, a tested shared `core.rs` and `runtime.rs`.
 - The runtime rejects non-solid, emissive, tinted, offset and non-canonical top faces, refuses overlapping/partial overlays, and merges at most 2×2 faces with identical UV orientation and packed light/color. It does not change other face directions, complex geometry or fluids.
-- Source hook plan/apply plus modified Linux renderer compilation passed in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43633951718). Android ARM64 cargo check, final library, test-world visual inspection, resource reload and performance benchmarking are not complete.
+- Source hook plan/apply plus modified Linux renderer compilation passed in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43633951718). [Android ARM64 app `cargo check`](https://github.com/jssantogit/starling-mods/actions/runs/43634253942) **passed**. Final library/link, test-world visual inspection, resource reload and performance benchmarking are not complete.
 - **Safety caveat:** this adapter skips some shader-pack-specific lighting modes and translucent-layer configurations, but old-lighting shader packs without those indicators may still be active; shader-pack fallback is therefore **not proven**. Do not release without fully gating on pack activity.
 
 ## Proposed native integration (follow-up, not implemented)

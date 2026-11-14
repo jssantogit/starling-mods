@@ -1,6 +1,6 @@
 # Greedy Meshing — Rust source adaptation (feasibility prototype)
 
-**Status: experimental native source adapter. The 16-test Rust core and `horizon-mixins plan/apply` + patched renderer `cargo check` on Linux have passed in [integration CI](https://github.com/jssantogit/starling-mods/actions/runs/43633951718). Android ARM64 check, final APK, gameplay visual parity and benchmarks remain unverified. Do not install this as a release.**
+**Status: experimental native source adapter. The 16-test Rust core and `horizon-mixins plan/apply` + patched renderer `cargo check` on Linux have passed in [integration CI](https://github.com/jssantogit/starling-mods/actions/runs/43633951718). Android ARM64 app `cargo check` has also [passed](https://github.com/jssantogit/starling-mods/actions/runs/43634253942). A linked APK, gameplay visual parity and benchmarks remain unverified. Do not install this as a release.**
 
 - Original mod: [Greedy Meshing Mod](https://github.com/programmer1o1/GreedyMeshingMod) by Sierra, MIT, pinned at `cafb82a28247dc2652bd11759d0075939d406617` (release 0.6.1, supports Minecraft 26.3).
 - Target: [Starling](https://github.com/starling-client/starling) at `09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2` (Minecraft 26.3).
