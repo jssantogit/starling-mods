@@ -1,9 +1,9 @@
-//! Standalone 16x16 face-rectangle sweep, adapted from Greedy Meshing Mod
-//! (Sierra, MIT): https://github.com/programmer1o1/GreedyMeshingMod.
-//!
-//! Only geometry grouping is implemented. Starling's near terrain renderer
-//! is not yet wired to this code; material keys, lighting, atlas tiling, AO,
-//! CTM and shader-pack compatibility must be solved before emitting GPU quads.
+// Standalone 16x16 face-rectangle sweep, adapted from Greedy Meshing Mod
+// (Sierra, MIT): https://github.com/programmer1o1/GreedyMeshingMod.
+//
+// Only geometry grouping is implemented. Starling's near terrain renderer
+// is not yet wired to this code; material keys, lighting, atlas tiling, AO,
+// CTM and shader-pack compatibility must be solved before emitting GPU quads.
 
 /// A merged rectangle of *identically keyed* faces in one 16x16 plane.
 ///

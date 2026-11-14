@@ -1,7 +1,7 @@
-//! Conservative native near-chunk greedy meshing pass for Starling 26.3.
-//! Only *upward* exposed faces of full opaque cubes are eligible in this alpha.
-//! It merges up to 2x2 faces so the existing 16-bit near-section UV format
-//! and the built-in WGSL tiling sampler remain usable. Nothing uses global state.
+// Conservative native near-chunk greedy meshing pass for Starling 26.3.
+// Only *upward* exposed faces of full opaque cubes are eligible in this alpha.
+// It merges up to 2x2 faces so the existing 16-bit near-section UV format
+// and the built-in WGSL tiling sampler remain usable. Nothing uses global state.
 
 use super::{Mesher, MeshScratch, OPAQUE_LAYER, SectionMesh, TerrainVertex, pi};
 use std::collections::{BTreeMap, HashMap};
