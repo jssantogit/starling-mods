@@ -185,7 +185,6 @@ pub fn expand_2x2_uv(
     Some(result)
 }
 
-
 /// Conservative planar projection of a quad in a 16×16×16 section.
 /// Axis 0 is X (U=Y,V=Z), axis 1 is Y (U=X,V=Z), axis 2 is Z (U=X,V=Y).
 /// Both face windings are retained; opposite faces must not share a signature.
@@ -279,11 +278,21 @@ pub fn project_quad(positions: &[[f32; 3]; 4]) -> Option<FacePlane> {
         _ => unreachable!(),
     };
     let low_u = positions.iter().map(|p| p[u]).fold(f32::INFINITY, f32::min);
-    let high_u = positions.iter().map(|p| p[u]).fold(f32::NEG_INFINITY, f32::max);
+    let high_u = positions
+        .iter()
+        .map(|p| p[u])
+        .fold(f32::NEG_INFINITY, f32::max);
     let low_v = positions.iter().map(|p| p[v]).fold(f32::INFINITY, f32::min);
-    let high_v = positions.iter().map(|p| p[v]).fold(f32::NEG_INFINITY, f32::max);
-    if low_u < 0.0 || high_u > 16.0 || low_v < 0.0 || high_v > 16.0
-        || low_u >= high_u || low_v >= high_v
+    let high_v = positions
+        .iter()
+        .map(|p| p[v])
+        .fold(f32::NEG_INFINITY, f32::max);
+    if low_u < 0.0
+        || high_u > 16.0
+        || low_v < 0.0
+        || high_v > 16.0
+        || low_u >= high_u
+        || low_v >= high_v
     {
         return None;
     }
@@ -318,6 +327,9 @@ pub fn project_quad(positions: &[[f32; 3]; 4]) -> Option<FacePlane> {
         axis: axis as u8,
         plane: at as i32,
         sign: if normal > 0.0 { 1 } else { -1 },
-        u0, u1, v0, v1,
+        u0,
+        u1,
+        v0,
+        v1,
     })
 }

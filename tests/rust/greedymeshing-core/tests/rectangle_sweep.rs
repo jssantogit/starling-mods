@@ -1,4 +1,6 @@
-use starling_greedymeshing_core::{Rect, expand_2x2_uv, merge_plane, merge_plane_limited, project_quad};
+use starling_greedymeshing_core::{
+    Rect, expand_2x2_uv, merge_plane, merge_plane_limited, project_quad,
+};
 
 fn reconstruct(original: &[Option<u64>; 256], rects: &[Rect]) {
     let mut actual = [None; 256];
@@ -189,7 +191,6 @@ fn one_tile_uv_roundtrips_exactly() {
     assert_eq!(expand_2x2_uv(&corner, &uv, 1, 1), Some(uv));
 }
 
-
 #[test]
 fn projects_the_six_face_directions_into_block_planes() {
     // For X and Z faces the local 2D basis is right-handed. For Y it
@@ -232,7 +233,12 @@ fn projects_the_six_face_directions_into_block_planes() {
 
 #[test]
 fn rejects_nonplanar_degenerate_or_out_of_section_faces() {
-    let mut q = [[0.0f32, 4.0, 0.0], [1.0, 4.0, 0.0], [1.0, 4.0, 1.0], [0.0, 4.0, 1.0]];
+    let mut q = [
+        [0.0f32, 4.0, 0.0],
+        [1.0, 4.0, 0.0],
+        [1.0, 4.0, 1.0],
+        [0.0, 4.0, 1.0],
+    ];
     assert!(project_quad(&q).is_some());
     q[2][1] = 4.5;
     assert!(project_quad(&q).is_none());
@@ -254,13 +260,21 @@ fn rejects_nonplanar_degenerate_or_out_of_section_faces() {
 
 #[test]
 fn face_at_section_boundary_never_references_a_block_beyond_section() {
-    let top = [[0.0, 16.0, 0.0], [0.0, 16.0, 1.0],
-        [1.0, 16.0, 1.0], [1.0, 16.0, 0.0]];
+    let top = [
+        [0.0, 16.0, 0.0],
+        [0.0, 16.0, 1.0],
+        [1.0, 16.0, 1.0],
+        [1.0, 16.0, 0.0],
+    ];
     let face = project_quad(&top).unwrap();
     assert_eq!(face.sign, 1);
     assert_eq!(face.block_coords(), Some([0, 15, 0]));
-    let bottom = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0],
-        [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+    let bottom = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+    ];
     let face = project_quad(&bottom).unwrap();
     assert_eq!(face.sign, -1);
     assert_eq!(face.block_coords(), Some([0, 0, 0]));
