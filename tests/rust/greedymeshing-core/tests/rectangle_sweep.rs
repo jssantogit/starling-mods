@@ -1,4 +1,4 @@
-use starling_greedymeshing_core::{Rect, expand_2x2_uv, merge_plane, merge_plane_limited};
+use starling_greedymeshing_core::{Rect, expand_2x2_uv, merge_plane, merge_plane_limited, project_quad};
 
 fn reconstruct(original: &[Option<u64>; 256], rects: &[Rect]) {
     let mut actual = [None; 256];
@@ -187,4 +187,81 @@ fn one_tile_uv_roundtrips_exactly() {
     let corner = [[0, 0], [1, 0], [1, 1], [0, 1]];
     let uv = [[32768, 0], [0, 0], [0, 32768], [32768, 32768]];
     assert_eq!(expand_2x2_uv(&corner, &uv, 1, 1), Some(uv));
+}
+
+
+#[test]
+fn projects_the_six_face_directions_into_block_planes() {
+    // For X and Z faces the local 2D basis is right-handed. For Y it
+    // is left-handed, so reverse the winding to get a positive Y normal.
+    for axis in 0..3usize {
+        for positive in [false, true] {
+            let mut q = [[0.0f32; 3]; 4];
+            let uv = if positive == (axis != 1) {
+                [[0, 0], [1, 0], [1, 1], [0, 1]]
+            } else {
+                [[0, 0], [0, 1], [1, 1], [1, 0]]
+            };
+            let (u_axis, v_axis) = match axis {
+                0 => (1, 2),
+                1 => (0, 2),
+                _ => (0, 1),
+            };
+            for i in 0..4 {
+                q[i][axis] = 9.0;
+                q[i][u_axis] = 3.0 + uv[i][0] as f32;
+                q[i][v_axis] = 5.0 + uv[i][1] as f32;
+            }
+            let face = project_quad(&q).expect("canonical six-way face");
+            assert_eq!(face.axis as usize, axis);
+            assert_eq!(face.plane, 9);
+            assert_eq!(face.sign, if positive { 1 } else { -1 });
+            assert_eq!((face.u0, face.u1, face.v0, face.v1), (3, 4, 5, 6));
+            assert_eq!(face.unit_corners(&q).unwrap(), uv);
+            assert_eq!(
+                face.block_coords(),
+                Some(match axis {
+                    0 => [if positive { 8 } else { 9 }, 3, 5],
+                    1 => [3, if positive { 8 } else { 9 }, 5],
+                    _ => [3, 5, if positive { 8 } else { 9 }],
+                })
+            );
+        }
+    }
+}
+
+#[test]
+fn rejects_nonplanar_degenerate_or_out_of_section_faces() {
+    let mut q = [[0.0f32, 4.0, 0.0], [1.0, 4.0, 0.0], [1.0, 4.0, 1.0], [0.0, 4.0, 1.0]];
+    assert!(project_quad(&q).is_some());
+    q[2][1] = 4.5;
+    assert!(project_quad(&q).is_none());
+    q[2][1] = 4.0;
+    q[1] = q[0];
+    assert!(project_quad(&q).is_none());
+    q[1] = [1.0, 4.0, 0.0];
+    q[0][1] = 4.25;
+    q[1][1] = 4.25;
+    q[2][1] = 4.25;
+    q[3][1] = 4.25;
+    assert!(project_quad(&q).is_none());
+    for vertex in &mut q {
+        vertex[1] = 4.0;
+        vertex[0] += 16.0;
+    }
+    assert!(project_quad(&q).is_none());
+}
+
+#[test]
+fn face_at_section_boundary_never_references_a_block_beyond_section() {
+    let top = [[0.0, 16.0, 0.0], [0.0, 16.0, 1.0],
+        [1.0, 16.0, 1.0], [1.0, 16.0, 0.0]];
+    let face = project_quad(&top).unwrap();
+    assert_eq!(face.sign, 1);
+    assert_eq!(face.block_coords(), Some([0, 15, 0]));
+    let bottom = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0],
+        [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]];
+    let face = project_quad(&bottom).unwrap();
+    assert_eq!(face.sign, -1);
+    assert_eq!(face.block_coords(), Some([0, 0, 0]));
 }
