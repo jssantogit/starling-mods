@@ -76,8 +76,11 @@ jobs:
           # cargo-ndk needs to discover Cargo.toml in its working directory
           # before forwarding check's arguments to Cargo.
           export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          # The app crate enables winit's Android Activity backend;
+          # checking the renderer in isolation does not.
           cargo ndk -t arm64-v8a --platform 26 check --locked \
-            -p horizon-client-render --no-default-features
+            -p horizon-android --no-default-features
       - name: Save mixin plan for review
         if: always()
         uses: actions/upload-artifact@v4

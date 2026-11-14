@@ -30,5 +30,11 @@ class AndroidCrossCompileWorkflowTests(unittest.TestCase):
             workflow.split("- name: Cross-check renderer for Android ARM64 (no APK)")[1],
         )
 
+    def test_android_check_uses_real_app_features(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        step = workflow.split("- name: Cross-check renderer for Android ARM64 (no APK)")[1]
+        self.assertIn("-p horizon-android --no-default-features", step)
+        self.assertIn("ANDROID_NDK_ROOT=", step)
+
 if __name__ == "__main__":
     unittest.main()
