@@ -1,0 +1,32 @@
+[mod]
+id = "greedymeshing"
+version = "0.1.0-alpha.1"
+priority = 110
+
+[compatibility]
+horizon_revision = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+
+# The pure sweep is the exact same source compiled by the local test crate.
+[[module]]
+id = "sweep"
+file = "crates/horizon-client-render/src/mesher.rs"
+name = "greedymeshing_core"
+source = "core.rs"
+
+# Only vertical +Y, full-cube, flat-lit, solid faces in this initial adapter.
+[[module]]
+id = "postprocess"
+file = "crates/horizon-client-render/src/mesher.rs"
+name = "greedymeshing_runtime"
+source = "runtime.rs"
+
+[[injection]]
+id = "compact-near-chunk-top-faces"
+kind = "RETURN"
+target = "horizon_client_render::mesher::Mesher::mesh_reusing"
+helper = "after.rs"
+bindings = [
+  { name = "result", ty = "crate::mesher::SectionMesh", value = "$value" },
+  { name = "mesher", ty = "&crate::mesher::Mesher<'_>", value = "&*self" },
+  { name = "scratch", ty = "&crate::mesher::MeshScratch", value = "&*scratch" },
+]
