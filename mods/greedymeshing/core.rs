@@ -38,11 +38,7 @@ pub fn merge_plane(cells: &[Option<u64>; 256]) -> Vec<Rect> {
 /// cautious first integration reuse the existing WGSL tiled sampler without
 /// changing the shader layout. Larger rectangles need a separate UV encoding.
 /// The width/height arguments are inclusive limits, both in 1..=16.
-pub fn merge_plane_limited(
-    cells: &[Option<u64>; 256],
-    max_width: u8,
-    max_height: u8,
-) -> Vec<Rect> {
+pub fn merge_plane_limited(cells: &[Option<u64>; 256], max_width: u8, max_height: u8) -> Vec<Rect> {
     assert!((1..=16).contains(&max_width));
     assert!((1..=16).contains(&max_height));
     let max_width = usize::from(max_width);
@@ -105,4 +101,90 @@ pub fn merge_plane_limited(
     }
 
     rectangles
+}
+
+
+/// Expand canonical unit-quad UV coordinates for at most a 2x2 merged face.
+///
+/// The four corners are the source quad's winding order, each with a logical
+/// (column, row) offset of (0 or 1, 0 or 1). A full vanilla sprite spans 0..32768
+/// packed steps per axis in a nearby-section TerrainVertex. For two blocks the
+/// nominal endpoint is 65536, so it is saturated to 65535 in u16. The existing
+/// terrain.wgsl tiled sampler repeats this 1.99997 coordinate correctly.
+///
+/// Partial/shifted/scaled/rotated-in-noncanonical ways must fall back to vanilla.
+pub fn expand_2x2_uv(
+    corners: &[[u8; 2]; 4],
+    packed_uv: &[[u16; 2]; 4],
+    width: u8,
+    height: u8,
+) -> Option<[[u16; 2]; 4]> {
+    if !(1..=2).contains(&width) || !(1..=2).contains(&height) {
+        return None;
+    }
+    let find = |target: [u8; 2]| corners.iter().position(|&p| p == target);
+    let (i00, i10, i01, i11) = (
+        find([0, 0])?,
+        find([1, 0])?,
+        find([0, 1])?,
+        find([1, 1])?,
+    );
+    if corners.iter().any(|p| p[0] > 1 || p[1] > 1) {
+        return None;
+    }
+    if [i00, i10, i01, i11].iter().any(|&i| {
+        [i00, i10, i01, i11].iter().filter(|&&j| j == i).count() != 1
+    }) {
+        return None;
+    }
+    const STEP: i32 = 32768;
+    let mut result = [[0u16; 2]; 4];
+    let mut axis_col = [false; 2];
+    let mut axis_row = [false; 2];
+
+    for channel in 0..2usize {
+        if packed_uv.iter().any(|uv| uv[channel] != 0 && uv[channel] != 32768) {
+            return None;
+        }
+        let initial = i32::from(packed_uv[i00][channel]);
+        let col = i32::from(packed_uv[i10][channel]) - initial;
+        let row = i32::from(packed_uv[i01][channel]) - initial;
+        let opposite = i32::from(packed_uv[i11][channel]);
+        if opposite != initial + col + row {
+            return None;
+        }
+        if (col.abs(), row.abs()) != (STEP, 0)
+            && (col.abs(), row.abs()) != (0, STEP)
+        {
+            return None;
+        }
+        axis_col[channel] = col != 0;
+        axis_row[channel] = row != 0;
+        let offset = if col < 0 {
+            (i32::from(width) - 1) * STEP
+        } else {
+            0
+        } + if row < 0 {
+            (i32::from(height) - 1) * STEP
+        } else {
+            0
+        };
+        for i in 0..4 {
+            let c = i32::from(corners[i][0]);
+            let r = i32::from(corners[i][1]);
+            let v = i32::from(packed_uv[i][channel])
+                + col * (i32::from(width) - 1) * c
+                + row * (i32::from(height) - 1) * r
+                + offset;
+            if !(0..=65536).contains(&v) {
+                return None;
+            }
+            result[i][channel] = v.min(65535) as u16;
+        }
+    }
+    // A 90-degree rotation or mirror is fine; a collapsed/sheared texture isn't.
+    if axis_col[0] == axis_col[1] || axis_row[0] == axis_row[1] {
+        return None;
+    }
+    Some(result)
 }
