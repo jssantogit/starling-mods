@@ -1,4 +1,4 @@
-use starling_greedymeshing_core::{Rect, merge_plane, merge_plane_limited};
+use starling_greedymeshing_core::{Rect, merge_plane, merge_plane_limited, expand_2x2_uv};
 
 fn reconstruct(original: &[Option<u64>; 256], rects: &[Rect]) {
     let mut actual = [None; 256];
@@ -139,4 +139,53 @@ fn one_by_one_limit_preserves_each_unit_face() {
     let rects = merge_plane_limited(&faces, 1, 1);
     assert_eq!(rects.len(), 256);
     reconstruct(&faces, &rects);
+}
+
+
+#[test]
+fn builtin_sampler_can_repeat_two_tiles_without_extra_vertex_bits() {
+    let corner = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let original = [[0, 0], [32768, 0], [32768, 32768], [0, 32768]];
+    let uv = expand_2x2_uv(&corner, &original, 2, 2).unwrap();
+    assert_eq!(uv[0], [0, 0]);
+    assert_eq!(uv[1], [65535, 0]); // 2.0 saturated at u16 max
+    assert_eq!(uv[2], [65535, 65535]);
+    assert_eq!(uv[3], [0, 65535]);
+}
+
+#[test]
+fn mirrored_and_rotated_texture_orientation_is_kept() {
+    let corner = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let mirrored = [[32768, 0], [0, 0], [0, 32768], [32768, 32768]];
+    let uv = expand_2x2_uv(&corner, &mirrored, 2, 2).unwrap();
+    assert_eq!(uv, [[65535, 0], [0, 0], [0, 65535], [65535, 65535]]);
+    let rotated = [[0, 0], [0, 32768], [32768, 32768], [32768, 0]];
+    let uv = expand_2x2_uv(&corner, &rotated, 2, 2).unwrap();
+    assert_eq!(uv, [[0, 0], [0, 65535], [65535, 65535], [65535, 0]]);
+}
+
+#[test]
+fn noncanonical_uvs_do_not_merge() {
+    let corner = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let partial_sprite = [[0, 0], [16384, 0], [16384, 16384], [0, 16384]];
+    assert!(expand_2x2_uv(&corner, &partial_sprite, 2, 2).is_none());
+    let shifted = [[100, 0], [32868, 0], [32868, 32768], [100, 32768]];
+    assert!(expand_2x2_uv(&corner, &shifted, 2, 2).is_none());
+}
+
+#[test]
+fn invalid_corner_geometry_and_out_of_range_extents_are_rejected() {
+    let duplicate = [[0, 0], [1, 0], [1, 0], [0, 1]];
+    let uv = [[0, 0], [32768, 0], [32768, 32768], [0, 32768]];
+    assert!(expand_2x2_uv(&duplicate, &uv, 2, 2).is_none());
+    let corners = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    assert!(expand_2x2_uv(&corners, &uv, 3, 1).is_none());
+    assert!(expand_2x2_uv(&corners, &uv, 0, 1).is_none());
+}
+
+#[test]
+fn one_tile_uv_roundtrips_exactly() {
+    let corner = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    let uv = [[32768, 0], [0, 0], [0, 32768], [32768, 32768]];
+    assert_eq!(expand_2x2_uv(&corner, &uv, 1, 1), Some(uv));
 }
