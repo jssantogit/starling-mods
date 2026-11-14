@@ -1,6 +1,6 @@
 # BadOptimizations → Starling (26.3)
 
-**Status: experimental native *source prototype*. Not verified by Horizon Mixins' full Starling build and NOT tested in game on Android. Do not publish as a working optimization or recommend installing it yet.**
+**Status: experimental native *source prototype*. Mixin plan/apply and Linux plus Android ARM64 Cargo checks have passed in [CI](https://github.com/jssantogit/starling-mods/actions/runs/43616775207). A final Android library build, launch/gameplay test and performance benchmarks have NOT been completed. Do not publish it as a working optimization yet.**
 
 ## Provenance
 
@@ -17,7 +17,7 @@ The prototype injects a cancellable `HEAD` into `Renderer::update_lightmap`, wit
 
 Key inputs are every value read by the current method: environment's ambient colour (RGB), sky light colour (RGB), block light tint (RGB), sky light factor, darkness, gamma, night vision, flicker, boss darkening and `fullbright`. Comparison uses exact float bits. The first render, device reset, changed inputs, changed stored pixels and an uninitialized texture always execute the original code.
 
-**Not yet ported:** particle extraction, debug renderer, toast and entity microoptimizations. Sky-colour caching from Minecraft 1.21.10 and below is obsolete for data-driven 26.3. Java mod FPS measurements do not predict Starling performance.
+**Not yet ported:** particle extraction, debug renderer, toast and entity microoptimizations. Sky-colour caching from Minecraft 1.21.10 and below is obsolete for data-driven 26.3. Java mod FPS measurements do not predict Starling performance. See [the feature-by-feature port matrix](PORT_MATRIX.md) for the remaining audit scope.
 
 ## Layout
 
@@ -42,7 +42,7 @@ Passing standalone tests and ZIP validation does **not** prove the Rust hooks re
 
 - [x] Identify original source revision, license, and concrete Starling target.
 - [x] Implement first source-level caching algorithm and isolated cache/packaging tests.
-- [ ] Validate the actual Horizon Mixins plan and staged Rust compilation against Starling `09fa16c`.
+- [x] Validate Horizon Mixins plan/apply and staged Rust checks on Linux + Android ARM64 for Starling `09fa16c` ([CI](https://github.com/jssantogit/starling-mods/actions/runs/43616775207)).
 - [ ] Compile through Starling's ARM64 native-build path, boot and reload graphics.
 - [ ] Parity-test day/night, dimensions, underwater, gamma, darkness/night vision, other mod hooks and shaders.
 - [ ] Measure CPU work saved, median/P99 frame times, memory use and thermal behavior against the pinned stock build.
