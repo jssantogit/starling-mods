@@ -1,0 +1,83 @@
+[mod]
+id = "badoptimizations"
+version = "0.1.0-alpha.2"
+priority = 100
+
+[compatibility]
+# Starling commit, not a tag or the old Horizon source revision.
+horizon_revision = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+
+# Thread-local cache only tracks the last renderer pointer and guards against
+# stale output. Async Renderer::new cannot be a [[state.constructor]] target.
+[[module]]
+id = "runtime"
+file = "crates/horizon-client-render/src/gfx.rs"
+name = "badoptimizations"
+source = "runtime.rs"
+
+[[injection]]
+id = "skip-unchanged-lightmap"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::gfx::Renderer::update_lightmap"
+helper = "before.rs"
+bindings = [
+  { name = "renderer", ty = "&mut crate::gfx::Renderer", value = "&mut *self" },
+  { name = "sky", ty = "&crate::environment::Sky", value = "sky" },
+  { name = "darkness", ty = "f32", value = "darkness" },
+  { name = "gamma", ty = "f32", value = "gamma" },
+  { name = "night_vision", ty = "f32", value = "night_vision" },
+  { name = "flicker", ty = "f32", value = "flicker" },
+  { name = "boss_darken", ty = "f32", value = "boss_darken" },
+]
+
+# Observe the output of the ORIGINAL method, including when its texture upload
+# is skipped because the 256 computed pixels are identical to the last upload.
+[[injection]]
+id = "remember-lightmap"
+kind = "RETURN"
+target = "horizon_client_render::gfx::Renderer::update_lightmap"
+helper = "after.rs"
+bindings = [
+  { name = "result", ty = "()", value = "$value" },
+  { name = "renderer", ty = "&mut crate::gfx::Renderer", value = "&mut *self" },
+  { name = "sky", ty = "&crate::environment::Sky", value = "sky" },
+  { name = "darkness", ty = "f32", value = "darkness" },
+  { name = "gamma", ty = "f32", value = "gamma" },
+  { name = "night_vision", ty = "f32", value = "night_vision" },
+  { name = "flicker", ty = "f32", value = "flicker" },
+  { name = "boss_darken", ty = "f32", value = "boss_darken" },
+]
+
+
+# ParticleEngine.render otherwise constructs a camera rotation and a light-cache
+# even if there is no particle to extract. Empty extraction produces no vertices.
+[[injection]]
+id = "skip-empty-particles"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::particles::ParticleEngine::render"
+helper = "particle_before.rs"
+bindings = [
+  { name = "particles", ty = "&crate::particles::ParticleEngine", value = "&*self" },
+]
+
+# A zero FOV-effects scale yields 1.0 for ordinary vision, or 0.1 for
+# first-person spyglass. Keep the exact vanilla priority of spyglass.
+[[module]]
+id = "fov_runtime"
+file = "crates/horizon-client-render/src/camera.rs"
+name = "badoptimizations_fov"
+source = "fov_runtime.rs"
+
+[[injection]]
+id = "shortcut-disabled-fov-effects"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::camera::field_of_view_modifier"
+helper = "fov_before.rs"
+bindings = [
+  { name = "player", ty = "&crate::camera::FovPlayer", value = "p" },
+  { name = "first_person", ty = "bool", value = "first_person" },
+  { name = "effect_scale", ty = "f32", value = "effect_scale" },
+]
