@@ -1,0 +1,90 @@
+name: BadOptimizations native-mixin plan
+
+on:
+  push:
+    paths:
+      - 'mods/badoptimizations/native/**'
+      - '.github/workflows/badoptimizations-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  native-plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout source prototype
+        uses: actions/checkout@v4
+      - name: Checkout exact Starling revision
+        uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+      - name: Checkout exact horizon-mixins revision
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mixins
+          ref: ddd9700b21997c95d95ac6ee5ecafe3830cf622a
+          path: upstream/horizon-mixins
+      - name: Install Rust for horizon-mixins
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+      - name: Remove source-documentation symlinks from disposable checkout
+        run: |
+          # horizon-mixins refuses symlinks in its staged source tree.
+          # CLAUDE.md is a documentation alias, not an engine input.
+          test -L upstream/starling/CLAUDE.md
+          rm upstream/starling/CLAUDE.md
+          # Fail if some other symlink requires a deliberate audit.
+          if find upstream/starling -type l -print -quit | grep -q .; then
+            echo 'Unexpected Starling symlinks in staging tree' >&2
+            find upstream/starling -type l
+            exit 1
+          fi
+      - name: Resolve source hooks against actual Starling renderer
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- plan \
+            --workspace upstream/starling \
+            --mods mods/badoptimizations/native/mixins \
+            --out target/badoptimizations-plan.json
+      - name: Apply source mixins to a separate stage
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- apply \
+            --workspace upstream/starling \
+            --mods mods/badoptimizations/native/mixins \
+            --out target/badoptimizations-stage
+      - name: Check modified renderer compiles (Linux host)
+        run: |
+          cargo check --locked --manifest-path target/badoptimizations-stage/Cargo.toml \
+            -p horizon-client-render --no-default-features
+      - name: Install pinned Android NDK and cargo-ndk
+        run: |
+          # Match packaging/android/build_apk.py in the pinned Starling source.
+          # The Rust target alone does not provide the C compiler used by ring.
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.2.13676358" > /dev/null || true
+          test -x "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+          cargo install cargo-ndk --version 3.5.4 --locked
+      - name: Cross-check renderer for Android ARM64 (no APK)
+        working-directory: target/badoptimizations-stage
+        run: |
+          rustup target add aarch64-linux-android
+          # cargo-ndk needs to discover Cargo.toml in its working directory
+          # before forwarding check's arguments to Cargo.
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          # The app crate enables winit's Android Activity backend;
+          # checking the renderer in isolation does not.
+          cargo ndk -t arm64-v8a --platform 26 check --locked \
+            -p horizon-android --no-default-features
+      - name: Save mixin plan for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: badoptimizations-native-plan
+          path: target/badoptimizations-plan.json
+          if-no-files-found: ignore

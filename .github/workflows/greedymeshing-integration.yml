@@ -1,0 +1,116 @@
+name: Greedy Meshing native integration
+
+on:
+  push:
+    branches:
+      - feat/greedymeshing-feasibility
+    paths:
+      - '.github/workflows/greedymeshing-integration.yml'
+      - 'mods/greedymeshing/**'
+  pull_request:
+    paths:
+      - '.github/workflows/greedymeshing-integration.yml'
+      - 'mods/greedymeshing/**'
+
+permissions:
+  contents: read
+
+jobs:
+  native-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Checkout Greedy Meshing sources
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify source identity and package contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          core = Path("mods/greedymeshing/core.rs").read_bytes()
+          native = Path("mods/greedymeshing/native/mixins/greedymeshing/core.rs").read_bytes()
+          assert core == native, "Native core differs from the tested Rust implementation"
+          PY
+          python3 tools/package_hnmod.py \
+            mods/greedymeshing/native \
+            --output target/greedymeshing-0.1.0-alpha.1.hnmod
+
+      - name: Checkout pinned Starling revision
+        uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+          persist-credentials: false
+
+      - name: Checkout pinned horizon-mixins
+        uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mixins
+          ref: ddd9700b21997c95d95ac6ee5ecafe3830cf622a
+          path: upstream/horizon-mixins
+          persist-credentials: false
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          components: rustfmt
+
+      - name: Discard documentation symlink in scratch copy of Starling
+        run: |
+          test -L upstream/starling/CLAUDE.md
+          rm upstream/starling/CLAUDE.md
+          if find upstream/starling -type l -print -quit | grep -q .; then
+            find upstream/starling -type l
+            exit 1
+          fi
+
+      - name: Plan hooks against exact Rust AST
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- plan \
+            --workspace upstream/starling \
+            --mods mods/greedymeshing/native/mixins \
+            --out target/greedymeshing-plan.json
+
+      - name: Apply code to disposable Starling stage
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- apply \
+            --workspace upstream/starling \
+            --mods mods/greedymeshing/native/mixins \
+            --out target/greedymeshing-stage
+
+      - name: Check compiled patched renderer on Linux
+        run: |
+          cargo check --locked \
+            --manifest-path target/greedymeshing-stage/Cargo.toml \
+            -p horizon-client-render --no-default-features
+
+      - name: Install pinned Android NDK and cargo-ndk
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;28.2.13676358" > /dev/null || true
+          test -x "$ANDROID_HOME/ndk/28.2.13676358/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang"
+          cargo install cargo-ndk --version 3.5.4 --locked
+
+      - name: Compile-check modified Starling Android ARM64 app
+        working-directory: target/greedymeshing-stage
+        run: |
+          rustup target add aarch64-linux-android
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          cargo ndk -t arm64-v8a --platform 26 check --locked \
+            -p horizon-android --no-default-features
+
+      - name: Attach plan and .hnmod source as diagnostics (not a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: greedymeshing-native-integration
+          path: |
+            target/greedymeshing-plan.json
+            target/greedymeshing-0.1.0-alpha.1.hnmod
+          if-no-files-found: ignore

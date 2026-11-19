@@ -1,0 +1,147 @@
+name: Build isolated Starling Greedy test APK
+
+on:
+  push:
+    branches:
+      - feat/greedymeshing-feasibility
+    paths:
+      - '.github/workflows/build-greedymeshing-apk.yml'
+      - 'mods/greedymeshing/native/**'
+      - 'mods/greedymeshing/core.rs'
+      - 'tools/patch_greedy_variant.py'
+      - 'tools/verify_greedy_apk.py'
+      - 'tests/test_patch_greedy_variant.py'
+      - 'tests/rust/greedymeshing-core/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - name: Checkout our port without persisting credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Checkout pinned Starling source
+        uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Validate source identity, tests and native bundle
+        run: |
+          python3 -m unittest discover -s tests -v
+          test "$(git -C upstream/starling rev-parse HEAD)" = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          base = Path('mods/greedymeshing/native')
+          mod = json.loads((base / 'horizon-native.json').read_text())
+          assert (mod['id'], mod['version'], mod['horizon'], mod['game']) == (
+              'greedymeshing', '0.1.0-alpha.2',
+              '09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2', '26.3'
+          )
+          assert Path('mods/greedymeshing/core.rs').read_bytes() == (
+              base / 'mixins/greedymeshing/core.rs'
+          ).read_bytes()
+          PY
+          python3 tools/package_hnmod.py mods/greedymeshing/native \
+            --output greedymeshing-0.1.0-alpha.2.hnmod
+      - name: Java 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Android SDK and pinned NDK
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "build-tools;35.0.0" "platforms;android-36" "ndk;28.2.13676358" > /dev/null
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+          test -f "$ANDROID_HOME/platforms/android-36/android.jar"
+      - name: Rust Android compilation tools
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal --target aarch64-linux-android
+          rustup default 1.95.0
+          cargo install cargo-ndk --version 3.5.4 --locked
+      - name: Prepare memory
+        run: |
+          set -e
+          where=/mnt
+          avail=$(df --output=avail -BG "$where" | tail -1 | tr -dc 0-9)
+          if [ "$avail" -lt 12 ]; then
+            where="$RUNNER_TEMP"
+            avail=$(df --output=avail -BG "$where" | tail -1 | tr -dc 0-9)
+          fi
+          if [ "$avail" -ge 12 ]; then
+            sudo fallocate -l 8G "$where/greedy-build.swap"
+            sudo chmod 600 "$where/greedy-build.swap"
+            sudo mkswap "$where/greedy-build.swap" >/dev/null
+            sudo swapon "$where/greedy-build.swap" || true
+          fi
+      - name: Compile Greedy Meshing into the native Android library
+        env:
+          ABI: arm64-v8a
+          PROFILE: quick
+          VARIANT: --dev
+          NATIVE_LIBRARY_ONLY: '1'
+          CARGO_BUILD_JOBS: '2'
+        run: |
+          set -euo pipefail
+          export NATIVE_CACHE="$RUNNER_TEMP/starling-native-cache"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          bash upstream/starling/packaging/android/native_build.sh \
+            "$GITHUB_WORKSPACE/upstream/starling" \
+            "$GITHUB_WORKSPACE/build-output" \
+            "$GITHUB_WORKSPACE/mods/greedymeshing/native/mixins/greedymeshing" \
+            2>&1 | tee "$GITHUB_WORKSPACE/greedy-build.log"
+      - name: Package independent Greedy test app without overwriting Starling Dev
+        run: |
+          set -euo pipefail
+          build="$RUNNER_TEMP/starling-native-cache/build-arm64-v8a"
+          python3 tools/patch_greedy_variant.py "$build"
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          (cd "$build" && python3 packaging/android/build_apk.py --abi arm64-v8a \
+            --profile quick --no-build --dev) 2>&1 | tee -a "$GITHUB_WORKSPACE/greedy-build.log"
+          cp "$build/target/android/starling-dev-0.8.0-arm64-v8a.apk" \
+            build-output/starling-dev-0.8.0-arm64-v8a.apk
+      - name: Verify package identity, signature and native library checksum
+        run: |
+          set -euo pipefail
+          apk=build-output/starling-dev-0.8.0-arm64-v8a.apk
+          python3 tools/verify_greedy_apk.py \
+            --manifest build-output/build.json \
+            --library build-output/libhorizon_android.so \
+            --apk "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt2" dump packagename "$apk" \
+            | grep -Fx 'io.github.juanluci.starling.greedy'
+      - name: Upload isolated test APK and provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: starling-greedymeshing-alpha2-arm64
+          path: |
+            build-output/starling-dev-0.8.0-arm64-v8a.apk
+            build-output/build.json
+            greedymeshing-0.1.0-alpha.2.hnmod
+          retention-days: 14
+          if-no-files-found: error
+      - name: Preserve diagnostic log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: greedymeshing-build-diagnostics
+          path: |
+            greedy-build.log
+            build-output/build.json
+          retention-days: 7
+          if-no-files-found: ignore
