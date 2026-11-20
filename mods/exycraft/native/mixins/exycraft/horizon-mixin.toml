@@ -16,10 +16,10 @@ source = "probe.rs"
 
 [[injection]]
 id = "enrich-renderer-diagnostic-pass-times"
-kind = "RETURN"
+kind = "HEAD"
+cancellable = true
 target = "horizon_client_render::gfx::Renderer::diagnostic_pass_times"
-helper = "after.rs"
+helper = "before.rs"
 bindings = [
-  { name = "result", ty = "serde_json::Value", value = "$value" },
   { name = "renderer", ty = "&Renderer", value = "&*self" },
 ]
