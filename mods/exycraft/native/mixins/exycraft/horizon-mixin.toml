@@ -1,0 +1,25 @@
+[mod]
+id = "exycraft"
+version = "0.1.0-alpha.1"
+priority = 200
+
+[compatibility]
+horizon_revision = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+
+# Renderer::diagnostic_pass_times() is only invoked for an opt-in
+# performance sample. Extend its output, never render or record per frame.
+[[module]]
+id = "probe"
+file = "crates/horizon-client-render/src/gfx.rs"
+name = "exycraft_probe"
+source = "probe.rs"
+
+[[injection]]
+id = "enrich-renderer-diagnostic-pass-times"
+kind = "HEAD"
+cancellable = true
+target = "horizon_client_render::gfx::Renderer::diagnostic_pass_times"
+helper = "before.rs"
+bindings = [
+  { name = "renderer", ty = "&Renderer", value = "&*self" },
+]

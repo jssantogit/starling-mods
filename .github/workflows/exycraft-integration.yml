@@ -1,0 +1,96 @@
+name: Exycraft diagnostics native integration
+
+on:
+  push:
+    branches:
+      - feat/exycraft-diagnostics-alpha1
+    paths:
+      - 'mods/exycraft/**'
+      - 'tests/test_exycraft.py'
+      - 'tools/exycraft_analyze.py'
+      - '.github/workflows/exycraft-integration.yml'
+  pull_request:
+    paths:
+      - 'mods/exycraft/**'
+      - 'tests/test_exycraft.py'
+      - 'tools/exycraft_analyze.py'
+      - '.github/workflows/exycraft-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  plan-and-arm64-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 65
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: starling-client/starling
+          ref: 09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2
+          path: upstream/starling
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mixins
+          ref: ddd9700b21997c95d95ac6ee5ecafe3830cf622a
+          path: upstream/horizon-mixins
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: '1.95.0'
+          components: rustfmt
+      - name: Validate Python analyzer and source bundle
+        run: |
+          python3 -m unittest discover -s tests -v
+          python3 tools/package_hnmod.py mods/exycraft/native --output target/exycraft-0.1.0-alpha.1.hnmod
+      - name: Verify pinned code inputs
+        run: |
+          test "$(git -C upstream/starling rev-parse HEAD)" = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
+          test "$(git -C upstream/horizon-mixins rev-parse HEAD)" = "ddd9700b21997c95d95ac6ee5ecafe3830cf622a"
+          if test -L upstream/starling/CLAUDE.md; then rm upstream/starling/CLAUDE.md; fi
+          if find upstream/starling -type l -print -quit | grep -q .; then
+            echo "Unexpected symlink in checkout"; exit 1
+          fi
+      - name: Plan Exycraft injection against pinned Rust AST
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- plan \
+            --workspace upstream/starling \
+            --mods mods/exycraft/native/mixins \
+            --out target/exycraft-plan.json
+      - name: Apply injection to disposable source stage
+        run: |
+          cargo run --locked --manifest-path upstream/horizon-mixins/Cargo.toml \
+            -p horizon-mixins-cli --release -- apply \
+            --workspace upstream/starling \
+            --mods mods/exycraft/native/mixins \
+            --out target/exycraft-stage
+      - name: Android NDK for ARM64 check
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+            "ndk;28.2.13676358" > /dev/null || true
+          cargo install cargo-ndk --version 3.5.4 --locked
+          rustup target add aarch64-linux-android
+      - name: Cargo check patched Horizon Android ARM64 app
+        working-directory: target/exycraft-stage
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/28.2.13676358"
+          export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
+          cargo ndk -t arm64-v8a --platform 26 check --locked \
+            -p horizon-android --no-default-features
+      - name: Upload sources and mixin plan, not APK
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exycraft-diagnostics-alpha1-source-validation
+          path: |
+            target/exycraft-plan.json
+            target/exycraft-0.1.0-alpha.1.hnmod
+          if-no-files-found: ignore
