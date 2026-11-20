@@ -7,12 +7,11 @@ Exycraft performs **no optimization** and makes no frame-rate claims.
 ## What it changes
 
 The source mod adds a RETURN injection to
-`horizon_client::game::diagnostics::Game<'_>::diagnostic_context` in the
+`horizon_client_render::gfx::Renderer::diagnostic_pass_times` in the
 **pinned** Starling revision `09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2`.
-Starling calls this method when a performance recording starts and for
-periodic performance samples. The mod appends a small `exycraft` object to
-that existing context without replacing Starling's menu, recorder, GPU
-profiling, logger or diagnostic ZIP exporter.
+Starling calls this method for performance samples. The mod appends a small
+`exycraft` field to that existing `gpu_passes` report, without replacing
+Starling's menu, recorder, GPU profiling, logger or diagnostic ZIP exporter.
 
 The optional fields are:
 
@@ -33,7 +32,7 @@ times, GPU pass timing when available, memory and thermal information.
 No privileged sysfs access or driver replacement is attempted.
 
 The probe is only invoked while the user has enabled Starling's existing
-performance recording (and once at the start of that recording). Data is
+performance recording. Data is
 stored and exported by the **existing local Starling pipeline**. No
 background telemetry, identifiers, network requests or new automatic
 exports.
@@ -59,9 +58,9 @@ The analyzer reads only performance JSONL and the ZIP manifest; it never
 extracts the archive or reads chat, logs, accounts or world files. Its
 outputs intentionally omit raw context that could contain personal data.
 
-The native hook produces a field under each **periodic** `sample.context`,
-plus the header metadata at recording start. Stock menu/startup samples
-that bypass `diagnostic_context()` may have no Exycraft fields.
+The native hook produces a field under each **periodic** `sample.gpu_passes`.
+Startup/menu samples using the renderer can also contain the field. The
+recording header is unchanged.
 
 ## Interpreting results
 
