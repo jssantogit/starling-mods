@@ -6,20 +6,20 @@ priority = 200
 [compatibility]
 horizon_revision = "09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2"
 
-# Starling already calls diagnostic_context() at recording start and once
-# per performance sample. Keep the recorder, UI, and ZIP exporter unchanged.
+# Renderer::diagnostic_pass_times() is only invoked for an opt-in
+# performance sample. Extend its output, never render or record per frame.
 [[module]]
 id = "probe"
-file = "crates/horizon-client/src/game.rs"
+file = "crates/horizon-client-render/src/gfx.rs"
 name = "exycraft_probe"
 source = "probe.rs"
 
 [[injection]]
-id = "enrich-stock-diagnostic-context"
+id = "enrich-renderer-diagnostic-pass-times"
 kind = "RETURN"
-target = "horizon_client::game::diagnostics::Game<'_>::diagnostic_context"
+target = "horizon_client_render::gfx::Renderer::diagnostic_pass_times"
 helper = "after.rs"
 bindings = [
   { name = "result", ty = "serde_json::Value", value = "$value" },
-  { name = "game", ty = "&Game<'_>", value = "&*self" },
+  { name = "renderer", ty = "&Renderer", value = "&*self" },
 ]
