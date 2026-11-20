@@ -5,6 +5,6 @@ fn exycraft_after_diagnostic_context(
     game: &Game<'_>,
 ) -> serde_json::Value {
     let gpu_name = game.renderer.as_ref().map(|renderer| renderer.info.name.as_str());
-    exycraft_probe::enrich(&mut result, gpu_name);
+    super::exycraft_probe::enrich(&mut result, gpu_name);
     result
 }
