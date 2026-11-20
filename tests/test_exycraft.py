@@ -35,6 +35,9 @@ class AnalyzerTests(unittest.TestCase):
                     "low_1pct_fps": 27, "cpu": {"avg_ms": 7},
                     "gpu": {"avg_ms": 21}},
                  "dropped_samples": 1,
+                 "timings": [{"stage": "mesh_section", "wall_ms": 12.5}],
+                 "gpu_passes": {"world": [{"stage": "terrain", "p95_ms": 15.5,
+                                           "samples": 15}]},
                  "slow_events": [{"type": "slow_frame"}],
                  "context": {"exycraft": {"probe_overhead_us": 30,
                     "proc_status": {"VmRSS_kb": 140000},
@@ -63,6 +66,8 @@ class AnalyzerTests(unittest.TestCase):
             self.assertEqual(s["median_exycraft_probe_overhead_us"], 40)
             self.assertEqual(s["leader_task_runqueue_wait_delta_ms"], 3)
             self.assertEqual(s["slow_events_recorded"], 1)
+            self.assertEqual(s["top_cpu_worker_stages"][0]["stage"], "mesh_section")
+            self.assertEqual(s["top_gpu_passes_rolling_p95"][0]["stage"], "world:terrain")
             self.assertTrue(s["export_truncated"])
             self.assertTrue(s["complete_end_record"])
             self.assertNotIn("private user data", mod.render(result))
