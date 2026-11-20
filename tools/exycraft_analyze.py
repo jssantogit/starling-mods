@@ -53,6 +53,48 @@ def safe_member(archive, name):
     return data
 
 
+def stage_summary(samples):
+    """Aggregate names without adding overlapping CPU or GPU durations."""
+    cpu_stages = {}
+    gpu_stages = {}
+    for row in samples:
+        spans = row.get("timings")
+        if isinstance(spans, list):
+            for span in spans:
+                if not isinstance(span, dict):
+                    continue
+                name, wall = span.get("stage"), number(span.get("wall_ms"))
+                if isinstance(name, str) and 0 < len(name) <= 80 and wall is not None:
+                    cpu_stages.setdefault(name, []).append(wall)
+        passes = row.get("gpu_passes")
+        if not isinstance(passes, dict):
+            continue
+        for family in ("world", "shader"):
+            stages = passes.get(family)
+            if not isinstance(stages, list):
+                continue
+            for stage in stages:
+                if not isinstance(stage, dict):
+                    continue
+                name = stage.get("stage")
+                p95 = number(stage.get("p95_ms"))
+                count = number(stage.get("samples"))
+                if (isinstance(name, str) and 0 < len(name) <= 80
+                        and p95 is not None and count is not None and count > 0):
+                    gpu_stages.setdefault(f"{family}:{name}", []).append(p95)
+    cpu = sorted(
+        [{"stage": k, "median_observed_wall_ms": median(v), "windows": len(v)}
+         for k, v in cpu_stages.items()],
+        key=lambda x: x["median_observed_wall_ms"], reverse=True
+    )[:15]
+    gpu = sorted(
+        [{"stage": k, "median_rolling_p95_ms": median(v), "windows": len(v)}
+         for k, v in gpu_stages.items()],
+        key=lambda x: x["median_rolling_p95_ms"], reverse=True
+    )[:15]
+    return cpu, gpu
+
+
 def summarize(name, rows, truncated=False):
     header = next((row for row in rows if row.get("type") == "header"), {})
     samples = [row for row in rows if row.get("type") == "sample"]
@@ -89,8 +131,18 @@ def summarize(name, rows, truncated=False):
     observed = [v for v in waits if v is not None]
     wait_delta = (round((observed[-1] - observed[0]) / 1e6, 3)
                   if len(observed) >= 2 and observed[-1] >= observed[0] else None)
-    slow_events = [event for v in samples for event in v.get("slow_events", [])
-                   if isinstance(event, dict)] if samples else []
+    slow_events = [event for v in samples
+                   for event in (v.get("slow_events") if isinstance(v.get("slow_events"), list) else [])
+                   if isinstance(event, dict)]
+    cpu_stages, gpu_stages = stage_summary(samples)
+    phase_names = ("update", "tick", "prepare", "render")
+    phase_averages = {
+        phase: mean([number(nested(v, "phases_avg_ms", phase)) for v in frames])
+        for phase in phase_names
+    }
+    contexts = [s.get("context") for s in samples if isinstance(s.get("context"), dict)]
+    resident = [number(nested(c, "renderer", "resident_sections")) for c in contexts]
+    uploaded = [number(nested(c, "renderer", "uploaded_bytes_total")) for c in contexts]
     metadata = header.get("metadata") if isinstance(header.get("metadata"), dict) else {}
     return {
         "file": name,
@@ -111,6 +163,11 @@ def summarize(name, rows, truncated=False):
         "similar_cpu_gpu_windows": ambiguous,
         "unavailable_cpu_gpu_windows": unavailable,
         "slow_events_recorded": len(slow_events),
+        "phases_mean_window_ms": phase_averages,
+        "top_cpu_worker_stages": cpu_stages,
+        "top_gpu_passes_rolling_p95": gpu_stages,
+        "max_resident_sections_observed": max([v for v in resident if v is not None], default=None),
+        "max_uploaded_bytes_total_observed": max([v for v in uploaded if v is not None], default=None),
         "dropped_samples_reported": max(
             [number(v.get("dropped_samples")) for v in samples
              if number(v.get("dropped_samples")) is not None], default=0),
@@ -180,6 +237,10 @@ def render(analysis):
                   f"- Candidate GPU-dominant / CPU-dominant / similar / unknown windows: "
                   f"{s['gpu_dominant_window_candidates']} / {s['cpu_dominant_window_candidates']} / "
                   f"{s['similar_cpu_gpu_windows']} / {s['unavailable_cpu_gpu_windows']}",
+                  f"- Mean phase durations (ms): {s['phases_mean_window_ms']}",
+                  f"- CPU/worker stages (not additive): {s['top_cpu_worker_stages'][:5]}",
+                  f"- GPU passes (rolling p95): {s['top_gpu_passes_rolling_p95'][:5]}",
+                  f"- Resident sections / uploaded bytes peak: {s['max_resident_sections_observed']} / {s['max_uploaded_bytes_total_observed']}",
                   f"- Reported slow events: {s['slow_events_recorded']}; dropped samples: {s['dropped_samples_reported']}",
                   f"- Exycraft measurements: {s['exycraft_windows']}; observed max RSS: {s['max_rss_kb_observed']} KiB",
                   f"- Median Exycraft collection overhead: {s['median_exycraft_probe_overhead_us']} us",
