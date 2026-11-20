@@ -1,6 +1,6 @@
-//! Lightweight, opt-in process probes for Starling's existing diagnostics.
-//! Called at the start of recording and once per emitted sample, not per frame.
-//! No persistent files, identifiers, network access, GPU commands or mutations.
+// Lightweight, opt-in process probes for Starling's existing diagnostics.
+// Called at the start of recording and once per emitted sample, not per frame.
+// No persistent files, identifiers, network access, GPU commands or mutations.
 
 use serde_json::{Value, json};
 use std::time::Instant;
