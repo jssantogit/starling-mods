@@ -125,7 +125,7 @@ class NativeBundleTests(unittest.TestCase):
             package_mod.package(root, output)
             with zipfile.ZipFile(output) as z:
                 self.assertIn("mixins/exycraft/probe.rs", z.namelist())
-                self.assertIn("mixins/exycraft/after.rs", z.namelist())
+                self.assertIn("mixins/exycraft/before.rs", z.namelist())
 
 
 if __name__ == "__main__":
