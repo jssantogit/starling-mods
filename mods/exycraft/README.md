@@ -6,12 +6,14 @@ Exycraft performs **no optimization** and makes no frame-rate claims.
 
 ## What it changes
 
-The source mod adds a RETURN injection to
+The source mod adds a cancellable HEAD injection to
 `horizon_client_render::gfx::Renderer::diagnostic_pass_times` in the
 **pinned** Starling revision `09fa16c167c4b2f8eb23fddd0faa808d56d0a2f2`.
-Starling calls this method for performance samples. The mod appends a small
-`exycraft` field to that existing `gpu_passes` report, without replacing
-Starling's menu, recorder, GPU profiling, logger or diagnostic ZIP exporter.
+Starling calls this method for performance samples. Because its original body
+contains macros unsupported by RETURN rewriting, the HEAD hook reproduces the
+pinned method's **world** and **shader** timing fields exactly, then appends an
+`exycraft` field to the existing `gpu_passes` report. This must be parity-tested
+when updating Starling; it does not replace the menu, recorder or ZIP exporter.
 
 The optional fields are:
 
