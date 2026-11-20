@@ -72,6 +72,22 @@ class AnalyzerTests(unittest.TestCase):
             self.assertTrue(s["complete_end_record"])
             self.assertNotIn("private user data", mod.render(result))
 
+    def test_probe_inside_gpu_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "gpu-probe.zip"
+            fixture_zip(dest, [
+                {"type": "header", "schema": 1},
+                {"type": "sample", "frames": {"frames": 60, "seconds": 1},
+                 "gpu_passes": {"world": [], "shader": None,
+                    "exycraft": {"probe_overhead_us": 10,
+                        "proc_status": {"VmRSS_kb": 200000}}}},
+                {"type": "end", "reason": "stopped"},
+            ])
+            info = mod.analyze(dest)["sessions"][0]
+            self.assertEqual(info["exycraft_windows"], 1)
+            self.assertEqual(info["max_rss_kb_observed"], 200000)
+            self.assertEqual(info["median_exycraft_probe_overhead_us"], 10)
+
     def test_missing_data_not_zero_and_partial_rows(self):
         with tempfile.TemporaryDirectory() as temp:
             dest = Path(temp) / "sample.zip"
