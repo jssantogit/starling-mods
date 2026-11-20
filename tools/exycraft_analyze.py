@@ -122,7 +122,7 @@ def summarize(name, rows, truncated=False):
             cpu_dominant += 1
         else:
             ambiguous += 1
-    exy = [nested(v, "context", "exycraft") for v in samples]
+    exy = [nested(v, "gpu_passes", "exycraft") or nested(v, "context", "exycraft") for v in samples]
     exy = [v for v in exy if isinstance(v, dict)]
     rss = [number(nested(v, "proc_status", "VmRSS_kb")) for v in exy]
     over = [number(v.get("probe_overhead_us")) for v in exy]
